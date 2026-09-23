@@ -131,7 +131,7 @@
                                 </StackPanel>
 
                                 <TextBlock Text="{x:Bind ViewModel.SyncSettings.StatusMessage, Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Margin="0,4,0,0" />
-                                <TextBlock Text="{x:Bind ViewModel.SyncSettings.LastSyncText, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                <TextBlock Text="{x:Bind ViewModel.SyncSettings.LastSyncText, Mode=OneWay}" Visibility="{x:Bind ViewModel.SyncSettings.LastSyncText, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
                             </StackPanel>
                         </Grid>
                     </StackPanel>

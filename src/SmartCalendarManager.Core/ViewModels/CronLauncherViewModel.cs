@@ -110,4 +110,14 @@ public partial class CronLauncherViewModel : ObservableObject
             _launcher.LaunchTarget(rule.Target, rule.Arguments);
         }
     }
+
+    [RelayCommand]
+    public void ToggleRule(CronLauncherRule? rule)
+    {
+        if (rule != null)
+        {
+            _scheduler.ToggleRule(rule.Id, !rule.IsEnabled);
+            LoadRules();
+        }
+    }
 }

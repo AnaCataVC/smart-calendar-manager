@@ -3,7 +3,7 @@
 [![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![WinUI 3](https://img.shields.io/badge/WinUI-3.0-0078D4?logo=windows&logoColor=white)](https://learn.microsoft.com/windows/apps/winui/winui3/)
 [![Windows App SDK](https://img.shields.io/badge/Windows_App_SDK-2.4-00A4EF?logo=windows11&logoColor=white)](https://github.com/microsoft/WindowsAppSDK)
-[![Tests](https://img.shields.io/badge/Tests-xUnit%20(55%2F55%20Passed)-4EBA6F?logo=xunit&logoColor=white)](https://xunit.net/)
+[![Tests](https://img.shields.io/badge/Tests-xUnit%20(70%2F70%20Passed)-4EBA6F?logo=xunit&logoColor=white)](https://xunit.net/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 *Read this in [English](#english) | Léelo en [Español](#español)*
@@ -42,7 +42,7 @@
 - **Google Cloud APIs:** `Google.Apis.Calendar.v3` & `Google.Apis.Auth`
 - **Security:** Windows Data Protection API (DPAPI) via `System.Security.Cryptography.ProtectedData`
 - **Installer:** Inno Setup 6 / 7 script (`installer.iss`)
-- **Unit Testing:** `xUnit` & `Moq` test suite (55 unit tests passing)
+- **Unit Testing:** `xUnit` & `Moq` test suite (70 unit tests passing)
 
 ### 4. Key Learnings
 - Architecting unpackaged WinUI 3 applications on .NET 9 with decoupled domain libraries (`SmartCalendarManager.Core`) for 100% testability.
@@ -106,7 +106,7 @@ dotnet run --project src/SmartCalendarManager.App/SmartCalendarManager.App.cspro
 - **Google Cloud APIs:** `Google.Apis.Calendar.v3` y `Google.Apis.Auth`
 - **Seguridad:** Windows Data Protection API (DPAPI)
 - **Instalador:** Script Inno Setup (`installer.iss`)
-- **Pruebas Unitarias:** xUnit y Moq (55 pruebas unitarias aprobadas)
+- **Pruebas Unitarias:** xUnit y Moq (70 pruebas unitarias aprobadas)
 
 ### 4. Aprendizajes Clave
 - Construcción de aplicaciones WinUI 3 unpackaged en .NET 9 con biblioteca de dominio desacoplada (`SmartCalendarManager.Core`) para 100% de testeabilidad.

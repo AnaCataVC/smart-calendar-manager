@@ -92,7 +92,7 @@
                                             Content="Unirse"
                                             Visibility="{x:Bind MeetingLink, Converter={StaticResource StringToVisibilityConverter}}"
                                             Click="JoinMeeting_Click"
-                                            Tag="{x:Bind MeetingLink}">
+                                            Tag="{x:Bind}">
                                             <Button.ContentTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
@@ -184,6 +184,10 @@
                                         </StackPanel>
 
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <ToggleButton Content="&#xE73E;" FontFamily="Segoe MDL2 Assets"
+                                                          IsChecked="{x:Bind IsEnabled}"
+                                                          Click="ToggleRule_Click" Tag="{x:Bind}"
+                                                          ToolTipService.ToolTip="Activar / Desactivar" />
                                             <Button Content="Probar" Click="TestRun_Click" Tag="{x:Bind}" />
                                             <Button Content="Eliminar" Click="DeleteRule_Click" Tag="{x:Bind}" />
                                         </StackPanel>
@@ -221,6 +225,19 @@
                                 <TextBlock Text="{x:Bind ViewModel.Settings.CurrentVersion, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 <Button Content="Buscar Actualizaciones" Command="{x:Bind ViewModel.Settings.CheckForUpdatesCommand}" />
                                 <TextBlock Text="{x:Bind ViewModel.Settings.UpdateStatusText, Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+
+                                <!-- Download section — visible only when an update is available -->
+                                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0"
+                                            Visibility="{x:Bind ViewModel.Settings.IsUpdateAvailable, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Button Content="Descargar e Instalar"
+                                            Command="{x:Bind ViewModel.Settings.DownloadAndInstallUpdateCommand}"
+                                            Style="{StaticResource AccentButtonStyle}" />
+                                    <ProgressRing IsActive="{x:Bind ViewModel.Settings.IsDownloading, Mode=OneWay}"
+                                                  Width="20" Height="20" />
+                                </StackPanel>
+                                <TextBlock Text="{x:Bind ViewModel.Settings.DownloadProgress, Mode=OneWay}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"
+                                           Visibility="{x:Bind ViewModel.Settings.IsDownloading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
                         </Grid>
                     </StackPanel>
@@ -229,5 +246,6 @@
         </NavigationView>
     </Grid>
 </Page>
+
 
 

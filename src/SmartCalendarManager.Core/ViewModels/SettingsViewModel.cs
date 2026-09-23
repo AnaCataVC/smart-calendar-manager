@@ -45,6 +45,12 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private UpdateInfo? _availableUpdate;
 
+    [ObservableProperty]
+    private bool _isDownloading;
+
+    [ObservableProperty]
+    private string _downloadProgress = string.Empty;
+
     public SettingsViewModel(
         IGoogleCalendarService calendarService,
         IUpdateService updateService)
@@ -132,4 +138,33 @@ public partial class SettingsViewModel : ObservableObject
             IsBusy = false;
         }
     }
+
+    [RelayCommand(CanExecute = nameof(CanDownloadUpdate))]
+    public async Task DownloadAndInstallUpdateAsync()
+    {
+        if (AvailableUpdate == null) return;
+        IsDownloading = true;
+        IsBusy = true;
+        UpdateStatusText = "Iniciando descarga...";
+        try
+        {
+            var progress = new Progress<double>(p =>
+                DownloadProgress = $"Descargando... {p:0}%");
+
+            await _updateService.DownloadAndInstallAsync(AvailableUpdate, progress);
+            UpdateStatusText = "Instalador lanzado. La aplicación se cerrará en breve.";
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText = $"Error al descargar: {ex.Message}";
+        }
+        finally
+        {
+            IsDownloading = false;
+            IsBusy = false;
+        }
+    }
+
+    private bool CanDownloadUpdate() => IsUpdateAvailable && !IsDownloading;
 }
+

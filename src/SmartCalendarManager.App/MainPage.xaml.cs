@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using SmartCalendarManager.Core.Helpers;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using SmartCalendarManager.Core.Models;
 using SmartCalendarManager.Core.ViewModels;
 
@@ -8,7 +8,10 @@ namespace SmartCalendarManager;
 
 public sealed partial class MainPage : Page
 {
-    public MainViewModel ViewModel => App.GetService<MainViewModel>();
+    // Cache singleton reference to avoid repeated DI lookups on every property access.
+    private readonly MainViewModel _viewModel = App.GetService<MainViewModel>();
+
+    public MainViewModel ViewModel => _viewModel;
 
     public MainPage()
     {
@@ -35,28 +38,39 @@ public sealed partial class MainPage : Page
         ViewModel.Agenda.DismissBanner();
     }
 
+    // Routes join-meeting through the ViewModel command instead of calling ProcessLaunchHelper directly.
     private void JoinMeeting_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is string url && !string.IsNullOrWhiteSpace(url))
+        if (sender is Button btn && btn.Tag is CalendarEvent ev)
         {
-            ProcessLaunchHelper.ShellExecute(url);
+            ViewModel.Agenda.JoinMeetingCommand.Execute(ev);
         }
     }
 
+    // Routes test-run through the generated RelayCommand on CronLauncherViewModel.
     private void TestRun_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is CronLauncherRule rule)
         {
-            ViewModel.CronLauncher.TestRunRule(rule);
+            ViewModel.CronLauncher.TestRunRuleCommand.Execute(rule);
         }
     }
 
+    // Routes delete through the generated RelayCommand on CronLauncherViewModel.
     private void DeleteRule_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is CronLauncherRule rule)
         {
-            ViewModel.CronLauncher.RemoveRule(rule);
+            ViewModel.CronLauncher.RemoveRuleCommand.Execute(rule);
+        }
+    }
+
+    // Routes enable/disable toggle through CronSchedulerService via ViewModel.
+    private void ToggleRule_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton btn && btn.Tag is CronLauncherRule rule)
+        {
+            ViewModel.CronLauncher.ToggleRuleCommand.Execute(rule);
         }
     }
 }
-

@@ -9,11 +9,8 @@ namespace SmartCalendarManager.Core.Services;
 
 public interface IAppLauncherService
 {
-    bool IsSlackRunning();
     bool IsGranolaRunning();
-    void EnsureSlackRunning();
     void EnsureGranolaRunning();
-    void LaunchSlack();
     void LaunchGranola();
     string? GetGranolaExecutablePath();
     void OpenUrl(string? url);
@@ -29,29 +26,10 @@ public class AppLauncherService : IAppLauncherService
         _logger = logger;
     }
 
-    public bool IsSlackRunning()
-    {
-        try { return Process.GetProcessesByName("slack").Length > 0; }
-        catch { return false; }
-    }
-
     public bool IsGranolaRunning()
     {
         try { return Process.GetProcessesByName("Granola").Length > 0; }
         catch { return false; }
-    }
-
-    public void EnsureSlackRunning()
-    {
-        if (!IsSlackRunning())
-        {
-            _logger.LogInformation("Slack is not running. Launching Slack...");
-            LaunchSlack();
-        }
-        else
-        {
-            _logger.LogInformation("Slack is already running.");
-        }
     }
 
     public void EnsureGranolaRunning()
@@ -64,18 +42,6 @@ public class AppLauncherService : IAppLauncherService
         else
         {
             _logger.LogInformation("Granola is already running.");
-        }
-    }
-
-    public void LaunchSlack()
-    {
-        try
-        {
-            ProcessLaunchHelper.ShellExecute("slack:");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to launch Slack.");
         }
     }
 

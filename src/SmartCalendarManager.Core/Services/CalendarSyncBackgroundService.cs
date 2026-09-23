@@ -48,14 +48,16 @@ public class CalendarSyncBackgroundService : BackgroundService
             _logger.LogWarning(ex, "Error during initial background sync.");
         }
 
-        // Auto-refresh calendar feed every 30 minutes
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(30));
+        // Respect the configured sync interval (minimum 5 min safety floor)
+        int intervalMinutes = Math.Max(5, _oauthSyncService.Settings.SyncIntervalMinutes);
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(intervalMinutes));
 
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
-                _logger.LogInformation("Running scheduled 30-min calendar auto-refresh...");
+                _logger.LogInformation("Running scheduled {Interval}-min calendar auto-refresh...", intervalMinutes);
+
                 if (_calendarService.IsConfigured)
                 {
                     await _calendarService.GetTodayEventsAsync();

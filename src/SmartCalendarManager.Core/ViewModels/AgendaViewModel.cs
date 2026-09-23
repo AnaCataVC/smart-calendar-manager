@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -12,6 +13,9 @@ public partial class AgendaViewModel : ObservableObject
 {
     private readonly IGoogleCalendarService _calendarService;
     private readonly IAppLauncherService _appLauncher;
+    // Captured on the UI thread; used to marshal banner mutations back to UI thread
+    // from the background System.Threading.Timer that fires UpcomingMeetingDetected.
+    private readonly SynchronizationContext? _syncContext;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -29,22 +33,34 @@ public partial class AgendaViewModel : ObservableObject
 
     public AgendaViewModel(
         IGoogleCalendarService calendarService,
-        IAppLauncherService appLauncher)
+        IAppLauncherService appLauncher,
+        SynchronizationContext? syncContext = null,
+        bool disableSyncContext = false)
     {
         _calendarService = calendarService;
         _appLauncher = appLauncher;
+        _syncContext = disableSyncContext ? null : (syncContext ?? SynchronizationContext.Current);
 
         _calendarService.UpcomingMeetingDetected += OnUpcomingMeetingDetected;
     }
 
     private void OnUpcomingMeetingDetected(object? sender, CalendarEvent ev)
     {
-        if (!_calendarService.DismissedAlertIds.Contains(ev.Id))
+        void UpdateBanner()
         {
-            ActiveBannerEvent = ev;
-            IsBannerVisible = true;
+            if (!_calendarService.DismissedAlertIds.Contains(ev.Id))
+            {
+                ActiveBannerEvent = ev;
+                IsBannerVisible = true;
+            }
         }
+
+        if (_syncContext != null)
+            _syncContext.Post(_ => UpdateBanner(), null);
+        else
+            UpdateBanner();
     }
+
 
     [RelayCommand]
     public async Task RefreshEventsAsync()
@@ -60,9 +76,18 @@ public partial class AgendaViewModel : ObservableObject
                 TodayEvents.Add(ev);
             }
 
-            StatusMessage = TodayEvents.Count > 0
-                ? $"{TodayEvents.Count} reuniones encontradas para hoy"
-                : "No hay reuniones programadas para hoy";
+            if (TodayEvents.Count > 0)
+            {
+                StatusMessage = $"{TodayEvents.Count} reuniones encontradas para hoy";
+            }
+            else if (!_calendarService.IsConfigured)
+            {
+                StatusMessage = "No hay calendario configurado. Ve a Configuración para agregar la URL de tu feed iCal.";
+            }
+            else
+            {
+                StatusMessage = "No hay reuniones programadas para hoy";
+            }
         }
         catch (Exception ex)
         {

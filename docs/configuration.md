@@ -21,9 +21,10 @@ Anyone with that URL can read the calendar. If it leaks, use *Reset* next to the
 
 ## Granola
 
-- Granola opens 5 minutes before each eligible meeting, and an *Abrir Granola* button appears on eligible agenda items. The button launches Granola and opens the meeting link if there is one.
+- Granola opens before each eligible meeting (5 minutes by default, adjustable from 0 to 60 in *Minutos de anticipación*), and an *Abrir Granola* button appears on eligible agenda items. The button launches Granola and opens the meeting link if there is one.
 - **Scope:** *Solo calendarios laborales* (default) or *Calendarios laborales y personales*. Saving the configuration refreshes the agenda and reschedules the pre-meeting timers, so a narrower scope applies right away.
-- The event filters (excluded keywords, ignore all-day events, require a video link) also decide which events open Granola automatically.
+- By default only events with a video meeting link (Google Meet, Zoom, Teams, Webex) in their location or description are eligible. Turn off *Abrir Granola solo si hay enlace de reunión* under *Filtros de eventos* to include events without a link.
+- The other event filters (excluded keywords, ignore all-day events) also decide which events open Granola automatically.
 
 ## Blocking personal time on the work calendar
 

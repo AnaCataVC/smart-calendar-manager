@@ -54,6 +54,20 @@ public class CalendarFilterTests
     }
 
     [Fact]
+    public void ShouldOpenGranola_DefaultSettings_WithoutMeetingLink_ShouldReturnFalse()
+    {
+        var settings = new CalendarFilterSettings();
+        var evt = new CalendarEvent
+        {
+            Title = "Revisión de roadmap",
+            StartTime = DateTime.Now.AddHours(1),
+            EndTime = DateTime.Now.AddHours(2)
+        };
+
+        Assert.False(settings.ShouldOpenGranola(evt));
+    }
+
+    [Fact]
     public void ShouldOpenGranola_AllDayEvent_WhenIgnoreAllDayIsTrue_ShouldReturnFalse()
     {
         var settings = new CalendarFilterSettings { IgnoreAllDayEvents = true };
@@ -71,7 +85,7 @@ public class CalendarFilterTests
     [Fact]
     public void ShouldOpenGranola_AllDayEvent_WhenIgnoreAllDayIsFalse_ShouldReturnTrueForRegularTitle()
     {
-        var settings = new CalendarFilterSettings { IgnoreAllDayEvents = false };
+        var settings = new CalendarFilterSettings { IgnoreAllDayEvents = false, RequireMeetingLink = false };
         var evt = new CalendarEvent
         {
             Title = "Hackathon Day 1",
@@ -118,7 +132,8 @@ public class CalendarFilterTests
     {
         var settings = new CalendarFilterSettings
         {
-            ExcludedKeywords = "[NoGranola], InternalOnly, DoNotRecord"
+            ExcludedKeywords = "[NoGranola], InternalOnly, DoNotRecord",
+            RequireMeetingLink = false
         };
 
         var evtExcluded = new CalendarEvent

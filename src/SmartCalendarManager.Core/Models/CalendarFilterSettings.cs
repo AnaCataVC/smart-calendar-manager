@@ -29,7 +29,12 @@ public class CalendarFilterSettings
     /// <summary>
     /// Gets or sets whether actions should only open if the calendar event contains a valid video conference URL (Meet, Zoom, Teams, Webex).
     /// </summary>
-    public bool RequireMeetingLink { get; set; }
+    public bool RequireMeetingLink { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets how many minutes before an eligible meeting Granola is opened.
+    /// </summary>
+    public int GranolaLeadMinutes { get; set; } = 5;
 
     /// <summary>
     /// Gets or sets which calendar feeds Granola applies to (auto-open and the agenda button).

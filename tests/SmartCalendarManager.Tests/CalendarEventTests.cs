@@ -72,7 +72,7 @@ public class CalendarEventTests
         Assert.False(evt.IsPast);
         Assert.False(evt.IsInProgress);
         Assert.True(evt.IsUpcoming);
-        Assert.Equal("Granola se abrirá 5 min antes", evt.StatusText);
+        Assert.Equal("Granola se abrirá antes de empezar", evt.StatusText);
     }
 
     [Fact]

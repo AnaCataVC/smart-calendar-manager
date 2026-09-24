@@ -30,7 +30,7 @@
                     Grid.Row="0"
                     IsOpen="{x:Bind ViewModel.Agenda.IsBannerVisible, Mode=OneWay}"
                     Severity="Informational"
-                    Title="Reunión próxima en 5 minutos"
+                    Title="Reunión próxima"
                     Message="{x:Bind ViewModel.Agenda.ActiveBannerEvent.Title, Mode=OneWay}"
                     IsClosable="True"
                     CloseButtonClick="InfoBar_CloseButtonClick"
@@ -212,7 +212,10 @@
                                 <TextBox Header="Nombre" Text="{x:Bind ViewModel.Settings.NewFeedName, Mode=TwoWay}" PlaceholderText="ej: Trabajo, Gmail, Familia" />
                                 <TextBox Header="URL iCal secreta (.ics)" Text="{x:Bind ViewModel.Settings.NewFeedUrl, Mode=TwoWay}" PlaceholderText="https://calendar.google.com/calendar/ical/.../private-.../basic.ics" />
                                 <PasswordBox Header="Contraseña HTTP Basic (opcional, solo si el feed la exige)" Password="{x:Bind ViewModel.Settings.NewFeedKey, Mode=TwoWay}" />
-                                <ToggleSwitch Header="Tipo" IsOn="{x:Bind ViewModel.Settings.NewFeedIsPersonal, Mode=TwoWay}" OnContent="Personal" OffContent="Laboral" />
+                                <RadioButtons Header="Tipo" MaxColumns="2" SelectedIndex="{x:Bind ViewModel.Settings.NewFeedKindIndex, Mode=TwoWay}">
+                                    <x:String>Laboral</x:String>
+                                    <x:String>Personal</x:String>
+                                </RadioButtons>
                                 <StackPanel Orientation="Horizontal" Spacing="12">
                                     <Button Content="Agregar" Command="{x:Bind ViewModel.Settings.AddFeedCommand}" />
                                     <ProgressRing IsActive="{x:Bind ViewModel.Settings.IsBusy, Mode=OneWay}" Width="20" Height="20" />
@@ -222,8 +225,12 @@
 
                         <Expander Header="Granola" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                             <StackPanel Spacing="12">
-                                <TextBlock Text="Granola se abre 5 minutos antes de cada reunión elegible, y el botón Abrir Granola aparece en la agenda para esos eventos." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <ToggleSwitch Header="Aplicar Granola a" IsOn="{x:Bind ViewModel.Settings.GranolaIncludesPersonal, Mode=TwoWay}" OnContent="Calendarios laborales y personales" OffContent="Solo calendarios laborales" />
+                                <TextBlock Text="Granola se abre antes de cada reunión elegible (con enlace de videollamada, si lo exiges en Filtros), y el botón Abrir Granola aparece en la agenda para esos eventos." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <RadioButtons Header="Aplicar Granola a" SelectedIndex="{x:Bind ViewModel.Settings.GranolaScopeIndex, Mode=TwoWay}">
+                                    <x:String>Solo calendarios laborales</x:String>
+                                    <x:String>Calendarios laborales y personales</x:String>
+                                </RadioButtons>
+                                <NumberBox Header="Minutos de anticipación" Value="{x:Bind ViewModel.Settings.GranolaLeadMinutes, Mode=TwoWay}" Minimum="0" Maximum="60" SpinButtonPlacementMode="Inline" HorizontalAlignment="Left" />
                             </StackPanel>
                         </Expander>
 
@@ -231,7 +238,7 @@
                             <StackPanel Spacing="12">
                                 <TextBox Header="Palabras Clave Excluidas (separadas por coma)" Text="{x:Bind ViewModel.Settings.ExcludedKeywords, Mode=TwoWay}" />
                                 <ToggleSwitch Header="Ignorar eventos de todo el día" IsOn="{x:Bind ViewModel.Settings.IgnoreAllDay, Mode=TwoWay}" />
-                                <ToggleSwitch Header="Exigir enlace de videoconferencia (Meet/Zoom/Teams)" IsOn="{x:Bind ViewModel.Settings.RequireLink, Mode=TwoWay}" />
+                                <ToggleSwitch Header="Abrir Granola solo si hay enlace de reunión (Meet/Zoom/Teams/Webex)" IsOn="{x:Bind ViewModel.Settings.RequireLink, Mode=TwoWay}" />
                             </StackPanel>
                         </Expander>
 

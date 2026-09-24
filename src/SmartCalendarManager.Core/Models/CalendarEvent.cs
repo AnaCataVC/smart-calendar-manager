@@ -98,7 +98,7 @@ public class CalendarEvent
         {
             if (IsInProgress) return "En curso";
             if (IsPast) return "Finalizada";
-            return OpensGranola ? "Granola se abrirá 5 min antes" : "Solo en calendario";
+            return OpensGranola ? "Granola se abrirá antes de empezar" : "Solo en calendario";
         }
     }
 

@@ -30,10 +30,13 @@ public partial class SettingsViewModel : ObservableObject
     private string _newFeedKey = string.Empty;
 
     [ObservableProperty]
-    private bool _newFeedIsPersonal;
+    private int _newFeedKindIndex = (int)CalendarFeedKind.Work;
 
     [ObservableProperty]
-    private bool _granolaIncludesPersonal;
+    private int _granolaScopeIndex = (int)GranolaScope.WorkOnly;
+
+    [ObservableProperty]
+    private double _granolaLeadMinutes = 5;
 
     [ObservableProperty]
     private string _blockTitle = "🔒 Ocupada";
@@ -48,7 +51,7 @@ public partial class SettingsViewModel : ObservableObject
     private bool _ignoreAllDay = true;
 
     [ObservableProperty]
-    private bool _requireLink;
+    private bool _requireLink = true;
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -94,7 +97,8 @@ public partial class SettingsViewModel : ObservableObject
         ExcludedKeywords = f.ExcludedKeywords;
         IgnoreAllDay = f.IgnoreAllDayEvents;
         RequireLink = f.RequireMeetingLink;
-        GranolaIncludesPersonal = f.GranolaScope == GranolaScope.All;
+        GranolaScopeIndex = (int)f.GranolaScope;
+        GranolaLeadMinutes = f.GranolaLeadMinutes;
 
         CurrentVersion = _updateService.CurrentAppVersion;
         RegenerateScript();
@@ -135,7 +139,7 @@ public partial class SettingsViewModel : ObservableObject
                 return;
             }
 
-            var kind = NewFeedIsPersonal ? CalendarFeedKind.Personal : CalendarFeedKind.Work;
+            var kind = (CalendarFeedKind)NewFeedKindIndex;
             Feeds.Add(new CalendarFeed
             {
                 Name = string.IsNullOrWhiteSpace(NewFeedName) ? CalendarFeed.LabelFor(kind) : NewFeedName.Trim(),
@@ -178,7 +182,9 @@ public partial class SettingsViewModel : ObservableObject
                 ExcludedKeywords = ExcludedKeywords,
                 IgnoreAllDayEvents = IgnoreAllDay,
                 RequireMeetingLink = RequireLink,
-                GranolaScope = GranolaIncludesPersonal ? GranolaScope.All : GranolaScope.WorkOnly
+                GranolaScope = (GranolaScope)GranolaScopeIndex,
+                // NumberBox yields NaN when cleared; fall back to the default lead time.
+                GranolaLeadMinutes = double.IsNaN(GranolaLeadMinutes) ? 5 : Math.Clamp((int)GranolaLeadMinutes, 0, 60)
             };
             _calendarService.UpdateFilterSettings(f);
             await PersistFeedsAndRefreshAsync();

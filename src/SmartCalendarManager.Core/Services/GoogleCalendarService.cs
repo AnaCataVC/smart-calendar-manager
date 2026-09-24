@@ -39,7 +39,9 @@ public class GoogleCalendarService : IGoogleCalendarService
     private const string LegacyICalKeySettingKey = "CalendarICalKey";
     private const string CalendarExcludedKeywordsKey = "CalendarExcludedKeywords";
     private const string CalendarIgnoreAllDayEventsKey = "CalendarIgnoreAllDayEvents";
-    private const string CalendarRequireMeetingLinkKey = "CalendarRequireMeetingLink";
+    // Renamed from "CalendarRequireMeetingLink" so installs that saved the old off-by-default value pick up the new default.
+    private const string CalendarRequireMeetingLinkKey = "GranolaRequireMeetingLink";
+    private const string GranolaLeadMinutesKey = "GranolaLeadMinutes";
     private const string GranolaScopeKey = "GranolaScope";
     private const string DismissedAlertsKey = "CalendarDismissedAlerts";
 
@@ -96,6 +98,11 @@ public class GoogleCalendarService : IGoogleCalendarService
             if (bool.TryParse(requireLinkStr, out var requireLink))
             {
                 _filterSettings.RequireMeetingLink = requireLink;
+            }
+
+            if (int.TryParse(LocalSettingsHelper.Get(GranolaLeadMinutesKey), out var leadMinutes))
+            {
+                _filterSettings.GranolaLeadMinutes = leadMinutes;
             }
 
             if (Enum.TryParse<GranolaScope>(LocalSettingsHelper.Get(GranolaScopeKey), out var scope))
@@ -164,6 +171,7 @@ public class GoogleCalendarService : IGoogleCalendarService
         LocalSettingsHelper.Set(CalendarIgnoreAllDayEventsKey, _filterSettings.IgnoreAllDayEvents.ToString());
         LocalSettingsHelper.Set(CalendarRequireMeetingLinkKey, _filterSettings.RequireMeetingLink.ToString());
         LocalSettingsHelper.Set(GranolaScopeKey, _filterSettings.GranolaScope.ToString());
+        LocalSettingsHelper.Set(GranolaLeadMinutesKey, _filterSettings.GranolaLeadMinutes.ToString());
         _logger.LogInformation("Calendar filter settings updated.");
     }
 
@@ -282,7 +290,7 @@ public class GoogleCalendarService : IGoogleCalendarService
                 continue;
             }
 
-            var granolaAlertTime = meeting.StartTime.AddMinutes(-5);
+            var granolaAlertTime = meeting.StartTime.AddMinutes(-_filterSettings.GranolaLeadMinutes);
             var granolaDelay = granolaAlertTime - now;
 
             if (granolaDelay > TimeSpan.Zero)
@@ -299,9 +307,9 @@ public class GoogleCalendarService : IGoogleCalendarService
 
                 _activeTimers.Add(granolaTimer);
             }
-            else if (now >= meeting.StartTime.AddMinutes(-5) && now < meeting.StartTime)
+            else if (now >= granolaAlertTime && now < meeting.StartTime)
             {
-                _logger.LogInformation("Meeting '{Title}' is in less than 5 minutes. Ensuring Granola immediately.", meeting.Title);
+                _logger.LogInformation("Meeting '{Title}' starts within the Granola lead time. Ensuring Granola immediately.", meeting.Title);
                 UpcomingMeetingDetected?.Invoke(this, meeting);
                 _appLauncherService.EnsureGranolaRunning();
             }

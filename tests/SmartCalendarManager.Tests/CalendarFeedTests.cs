@@ -166,13 +166,13 @@ public class CalendarFeedTests : IDisposable
             new CalendarFeed { Name = "Gmail", Url = "https://example.com/personal.ics", Kind = CalendarFeedKind.Personal }
         });
 
-        service.UpdateFilterSettings(new CalendarFilterSettings { GranolaScope = GranolaScope.WorkOnly });
+        service.UpdateFilterSettings(new CalendarFilterSettings { GranolaScope = GranolaScope.WorkOnly, RequireMeetingLink = false });
         var workOnly = await service.GetTodayEventsAsync();
         Assert.False(workOnly.Single(e => e.Title == "Dentist").InGranolaScope);
         Assert.False(workOnly.Single(e => e.Title == "Dentist").OpensGranola);
         Assert.True(workOnly.Single(e => e.Title == "Work sync").OpensGranola);
 
-        service.UpdateFilterSettings(new CalendarFilterSettings { GranolaScope = GranolaScope.All });
+        service.UpdateFilterSettings(new CalendarFilterSettings { GranolaScope = GranolaScope.All, RequireMeetingLink = false });
         var all = await service.GetTodayEventsAsync();
         Assert.All(all, e => Assert.True(e.InGranolaScope && e.OpensGranola));
     }

@@ -1,29 +1,12 @@
 using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Google.Apis.Util.Store;
-using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 using SmartCalendarManager.Core.Models;
 using SmartCalendarManager.Core.Services;
 using Xunit;
 
 namespace SmartCalendarManager.Tests;
 
-public class GoogleOAuthSyncTests
+public class CronModelTests
 {
-    [Fact]
-    public void CalendarSyncSettings_InitializesWithDefaults()
-    {
-        var settings = new CalendarSyncSettings();
-        Assert.Equal("primary", settings.PersonalCalendarId);
-        Assert.Equal("🔒 Ocupada", settings.BlockEventTitle);
-        Assert.True(settings.AutoSyncEnabled);
-        Assert.Equal(15, settings.SyncIntervalMinutes);
-        Assert.Empty(settings.EventMappings);
-    }
-
     [Fact]
     public void DayOfWeekFlags_ConversionsAndChecks_WorkCorrectly()
     {
@@ -54,22 +37,5 @@ public class GoogleOAuthSyncTests
 
         rule.Days = DayOfWeekFlags.All;
         Assert.Equal("Todos los días", rule.FormattedDays);
-    }
-
-    [Fact]
-    public async Task DpapiDataStore_StoreAndRetrieve_RoundtripsSuccessfully()
-    {
-        var store = new DpapiDataStore("TestTokens");
-        string key = "test_key_" + Guid.NewGuid().ToString("N");
-        var tokenData = new { AccessToken = "abc123xyz", ExpiresIn = 3600 };
-
-        await store.StoreAsync(key, tokenData);
-        var retrieved = await store.GetAsync<dynamic>(key);
-
-        Assert.NotNull(retrieved);
-
-        await store.DeleteAsync<dynamic>(key);
-        var afterDelete = await store.GetAsync<dynamic>(key);
-        Assert.Null(afterDelete);
     }
 }

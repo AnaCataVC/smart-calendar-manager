@@ -1,3 +1,4 @@
+using Windows.ApplicationModel.DataTransfer;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -24,13 +25,14 @@ public sealed partial class MainPage : Page
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (args.SelectedItem is NavigationViewItem item && item.Tag is string tag)
-        {
-            AgendaSection.Visibility = tag == "Agenda" ? Visibility.Visible : Visibility.Collapsed;
-            SyncSection.Visibility = tag == "Sync" ? Visibility.Visible : Visibility.Collapsed;
-            CronSection.Visibility = tag == "Cron" ? Visibility.Visible : Visibility.Collapsed;
-            SettingsSection.Visibility = tag == "Settings" ? Visibility.Visible : Visibility.Collapsed;
-        }
+        var tag = args.IsSettingsSelected
+            ? "Settings"
+            : (args.SelectedItem as NavigationViewItem)?.Tag as string;
+        if (tag == null) return;
+
+        AgendaSection.Visibility = tag == "Agenda" ? Visibility.Visible : Visibility.Collapsed;
+        CronSection.Visibility = tag == "Cron" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsSection.Visibility = tag == "Settings" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void InfoBar_CloseButtonClick(InfoBar sender, object args)
@@ -45,6 +47,29 @@ public sealed partial class MainPage : Page
         {
             ViewModel.Agenda.JoinMeetingCommand.Execute(ev);
         }
+    }
+
+    private void OpenGranola_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is CalendarEvent ev)
+        {
+            ViewModel.Agenda.OpenGranolaCommand.Execute(ev);
+        }
+    }
+
+    private void DeleteFeed_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is CalendarFeed feed)
+        {
+            ViewModel.Settings.RemoveFeedCommand.Execute(feed);
+        }
+    }
+
+    private void CopyScript_Click(object sender, RoutedEventArgs e)
+    {
+        var package = new DataPackage();
+        package.SetText(ViewModel.Settings.GeneratedScript);
+        Clipboard.SetContent(package);
     }
 
     // Routes test-run through the generated RelayCommand on CronLauncherViewModel.

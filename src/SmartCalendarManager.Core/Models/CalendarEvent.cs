@@ -38,6 +38,28 @@ public class CalendarEvent
     public bool OpensGranola { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets whether the event belongs to a feed covered by the Granola scope (shows the agenda button).
+    /// </summary>
+    public bool InGranolaScope { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the kind of the feed the event came from.
+    /// </summary>
+    public CalendarFeedKind FeedKind { get; set; } = CalendarFeedKind.Work;
+
+    /// <summary>
+    /// Gets or sets the display name of the feed the event came from.
+    /// </summary>
+    public string FeedName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Tag shown in the agenda (e.g. "Personal · Gmail").
+    /// </summary>
+    public string FeedTag => string.IsNullOrWhiteSpace(FeedName)
+        ? CalendarFeed.LabelFor(FeedKind)
+        : $"{CalendarFeed.LabelFor(FeedKind)} · {FeedName}";
+
+    /// <summary>
     /// Gets or sets whether the event is an all-day event.
     /// </summary>
     public bool IsAllDay { get; set; }
@@ -94,6 +116,9 @@ public class CalendarEvent
                Title == other.Title &&
                MeetingLink == other.MeetingLink &&
                OpensGranola == other.OpensGranola &&
+               InGranolaScope == other.InGranolaScope &&
+               FeedKind == other.FeedKind &&
+               FeedName == other.FeedName &&
                IsAllDay == other.IsAllDay;
     }
 }

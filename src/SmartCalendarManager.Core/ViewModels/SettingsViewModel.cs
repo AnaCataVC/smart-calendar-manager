@@ -1,4 +1,6 @@
 using System;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,14 +11,35 @@ namespace SmartCalendarManager.Core.ViewModels;
 
 public partial class SettingsViewModel : ObservableObject
 {
+    private const string AppsScriptEditorUrl = "https://script.google.com/home/projects/create";
+
     private readonly IGoogleCalendarService _calendarService;
     private readonly IUpdateService _updateService;
+    private readonly IAppLauncherService _appLauncher;
+    private readonly AgendaViewModel _agenda;
+
+    public ObservableCollection<CalendarFeed> Feeds { get; } = new();
 
     [ObservableProperty]
-    private string _iCalUrl = string.Empty;
+    private string _newFeedName = string.Empty;
 
     [ObservableProperty]
-    private string _iCalKey = string.Empty;
+    private string _newFeedUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _newFeedKey = string.Empty;
+
+    [ObservableProperty]
+    private bool _newFeedIsPersonal;
+
+    [ObservableProperty]
+    private bool _granolaIncludesPersonal;
+
+    [ObservableProperty]
+    private string _blockTitle = "🔒 Ocupada";
+
+    [ObservableProperty]
+    private string _generatedScript = string.Empty;
 
     [ObservableProperty]
     private string _excludedKeywords = string.Empty;
@@ -53,59 +76,118 @@ public partial class SettingsViewModel : ObservableObject
 
     public SettingsViewModel(
         IGoogleCalendarService calendarService,
-        IUpdateService updateService)
+        IUpdateService updateService,
+        IAppLauncherService appLauncher,
+        AgendaViewModel agenda)
     {
         _calendarService = calendarService;
         _updateService = updateService;
+        _appLauncher = appLauncher;
+        _agenda = agenda;
 
-        ICalUrl = _calendarService.ICalUrl ?? string.Empty;
-        ICalKey = _calendarService.ICalKey ?? string.Empty;
+        foreach (var feed in _calendarService.Feeds)
+        {
+            Feeds.Add(feed);
+        }
 
         var f = _calendarService.FilterSettings;
         ExcludedKeywords = f.ExcludedKeywords;
         IgnoreAllDay = f.IgnoreAllDayEvents;
         RequireLink = f.RequireMeetingLink;
+        GranolaIncludesPersonal = f.GranolaScope == GranolaScope.All;
 
         CurrentVersion = _updateService.CurrentAppVersion;
+        RegenerateScript();
+    }
+
+    partial void OnBlockTitleChanged(string value) => RegenerateScript();
+
+    private void RegenerateScript()
+    {
+        GeneratedScript = AppsScriptGenerator.Build(
+            Feeds.Where(feed => feed.Kind == CalendarFeedKind.Personal && feed.Enabled),
+            BlockTitle);
+    }
+
+    // Refetching through the agenda also reschedules the Granola timers, so removed feeds or a
+    // narrower Granola scope stop firing immediately.
+    private async Task PersistFeedsAndRefreshAsync()
+    {
+        _calendarService.SaveFeeds(Feeds);
+        RegenerateScript();
+        await _agenda.RefreshEventsAsync();
     }
 
     [RelayCommand]
-    public async Task SaveCalendarSettingsAsync()
+    public async Task AddFeedAsync()
     {
+        if (string.IsNullOrWhiteSpace(NewFeedUrl)) return;
+
         IsBusy = true;
-        StatusMessage = "Guardando y verificando feed iCal...";
+        StatusMessage = "Verificando feed iCal...";
         try
         {
-            if (!string.IsNullOrWhiteSpace(ICalUrl))
+            var url = NewFeedUrl.Trim();
+            var key = string.IsNullOrWhiteSpace(NewFeedKey) ? null : NewFeedKey.Trim();
+            if (!await _calendarService.IsValidFeedAsync(url, key))
             {
-                bool valid = await _calendarService.SetICalCredentialsAsync(ICalUrl, ICalKey);
-                if (!valid)
-                {
-                    StatusMessage = "Advertencia: La URL de iCal no parece ser un calendario válido.";
-                }
-            }
-            else
-            {
-                await _calendarService.ClearICalCredentialsAsync();
+                StatusMessage = "La URL no devolvió un calendario iCal válido. No se agregó.";
+                return;
             }
 
-            var f = new CalendarFilterSettings
+            var kind = NewFeedIsPersonal ? CalendarFeedKind.Personal : CalendarFeedKind.Work;
+            Feeds.Add(new CalendarFeed
             {
-                ExcludedKeywords = ExcludedKeywords,
-                IgnoreAllDayEvents = IgnoreAllDay,
-                RequireMeetingLink = RequireLink
-            };
-            _calendarService.UpdateFilterSettings(f);
+                Name = string.IsNullOrWhiteSpace(NewFeedName) ? CalendarFeed.LabelFor(kind) : NewFeedName.Trim(),
+                Url = url,
+                Kind = kind,
+                AuthKey = key
+            });
+            await PersistFeedsAndRefreshAsync();
 
-            StatusMessage = "Configuración del calendario guardada con éxito.";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Error al guardar: {ex.Message}";
+            NewFeedName = string.Empty;
+            NewFeedUrl = string.Empty;
+            NewFeedKey = string.Empty;
+            StatusMessage = "Calendario agregado.";
         }
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task RemoveFeedAsync(CalendarFeed? feed)
+    {
+        if (feed != null && Feeds.Remove(feed))
+        {
+            await PersistFeedsAndRefreshAsync();
+        }
+    }
+
+    [RelayCommand]
+    public void OpenScriptEditor() => _appLauncher.OpenUrl(AppsScriptEditorUrl);
+
+    [RelayCommand]
+    public async Task SaveCalendarSettingsAsync()
+    {
+        try
+        {
+            var f = new CalendarFilterSettings
+            {
+                ExcludedKeywords = ExcludedKeywords,
+                IgnoreAllDayEvents = IgnoreAllDay,
+                RequireMeetingLink = RequireLink,
+                GranolaScope = GranolaIncludesPersonal ? GranolaScope.All : GranolaScope.WorkOnly
+            };
+            _calendarService.UpdateFilterSettings(f);
+            await PersistFeedsAndRefreshAsync();
+
+            StatusMessage = "Configuración guardada con éxito.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error al guardar: {ex.Message}";
         }
     }
 

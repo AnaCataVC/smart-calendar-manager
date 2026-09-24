@@ -27,7 +27,7 @@ public sealed partial class MainWindow : Window
         SyncNowCommand = new AsyncRelayCommand(async () =>
         {
             var mainVm = App.GetService<MainViewModel>();
-            await mainVm.SyncAllNowAsync();
+            await mainVm.Agenda.RefreshEventsAsync();
         });
         ExitCommand = new RelayCommand(ExitApplication);
 

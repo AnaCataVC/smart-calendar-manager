@@ -82,11 +82,17 @@ public partial class AgendaViewModel : ObservableObject
             }
             else if (!_calendarService.IsConfigured)
             {
-                StatusMessage = "No hay calendario configurado. Ve a Configuración para agregar la URL de tu feed iCal.";
+                StatusMessage = "No hay calendarios configurados. Ve a Configuración para agregar tus URLs iCal.";
             }
             else
             {
                 StatusMessage = "No hay reuniones programadas para hoy";
+            }
+
+            var failed = _calendarService.FailedFeedNames;
+            if (failed is { Count: > 0 })
+            {
+                StatusMessage += $" (no se pudo leer: {string.Join(", ", failed)})";
             }
         }
         catch (Exception ex)
@@ -106,6 +112,13 @@ public partial class AgendaViewModel : ObservableObject
         {
             _appLauncher.OpenUrl(ev.MeetingLink);
         }
+    }
+
+    [RelayCommand]
+    public void OpenGranola(CalendarEvent? ev)
+    {
+        _appLauncher.LaunchGranola();
+        JoinMeeting(ev);
     }
 
     [RelayCommand]

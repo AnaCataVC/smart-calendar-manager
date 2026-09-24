@@ -3,6 +3,12 @@ using System.Linq;
 
 namespace SmartCalendarManager.Core.Models;
 
+public enum GranolaScope
+{
+    WorkOnly,
+    All
+}
+
 /// <summary>
 /// Settings and evaluation policy for determining whether calendar events should trigger alerts / app launches.
 /// </summary>
@@ -26,11 +32,24 @@ public class CalendarFilterSettings
     public bool RequireMeetingLink { get; set; }
 
     /// <summary>
+    /// Gets or sets which calendar feeds Granola applies to (auto-open and the agenda button).
+    /// </summary>
+    public GranolaScope GranolaScope { get; set; } = GranolaScope.WorkOnly;
+
+    public bool IsInGranolaScope(CalendarEvent calendarEvent) =>
+        GranolaScope == GranolaScope.All || calendarEvent.FeedKind == CalendarFeedKind.Work;
+
+    /// <summary>
     /// Evaluates a calendar event against the current filter rules to determine if Granola should be automatically opened.
     /// </summary>
     public bool ShouldOpenGranola(CalendarEvent? calendarEvent)
     {
         if (calendarEvent == null) return false;
+
+        if (!IsInGranolaScope(calendarEvent))
+        {
+            return false;
+        }
 
         // 1. Check all-day event rule
         if (IgnoreAllDayEvents && calendarEvent.IsAllDay)

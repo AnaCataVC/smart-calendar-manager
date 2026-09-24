@@ -8,19 +8,19 @@ namespace SmartCalendarManager.Core.Services;
 
 public class CalendarSyncBackgroundService : BackgroundService
 {
+    // Keeps the pre-meeting Granola timers fresh when events change during the day.
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(15);
+
     private readonly IGoogleCalendarService _calendarService;
-    private readonly IGoogleOAuthSyncService _oauthSyncService;
     private readonly ICronSchedulerService _cronScheduler;
     private readonly ILogger<CalendarSyncBackgroundService> _logger;
 
     public CalendarSyncBackgroundService(
         IGoogleCalendarService calendarService,
-        IGoogleOAuthSyncService oauthSyncService,
         ICronSchedulerService cronScheduler,
         ILogger<CalendarSyncBackgroundService> logger)
     {
         _calendarService = calendarService;
-        _oauthSyncService = oauthSyncService;
         _cronScheduler = cronScheduler;
         _logger = logger;
     }
@@ -37,35 +37,23 @@ public class CalendarSyncBackgroundService : BackgroundService
             {
                 await _calendarService.GetTodayEventsAsync();
             }
-
-            if (_oauthSyncService.Settings.AutoSyncEnabled)
-            {
-                await _oauthSyncService.SynchronizeAvailabilityAsync(stoppingToken);
-            }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error during initial background sync.");
+            _logger.LogWarning(ex, "Error during initial calendar fetch.");
         }
 
-        // Respect the configured sync interval (minimum 5 min safety floor)
-        int intervalMinutes = Math.Max(5, _oauthSyncService.Settings.SyncIntervalMinutes);
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(intervalMinutes));
+        using var timer = new PeriodicTimer(RefreshInterval);
 
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
-                _logger.LogInformation("Running scheduled {Interval}-min calendar auto-refresh...", intervalMinutes);
+                _logger.LogInformation("Running scheduled {Interval}-min calendar auto-refresh...", RefreshInterval.TotalMinutes);
 
                 if (_calendarService.IsConfigured)
                 {
                     await _calendarService.GetTodayEventsAsync();
-                }
-
-                if (_oauthSyncService.Settings.AutoSyncEnabled)
-                {
-                    await _oauthSyncService.SynchronizeAvailabilityAsync(stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -74,7 +62,7 @@ public class CalendarSyncBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in scheduled calendar sync.");
+                _logger.LogError(ex, "Error in scheduled calendar refresh.");
             }
         }
     }

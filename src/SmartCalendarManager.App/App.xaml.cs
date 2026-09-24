@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using Google.Apis.Util.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.UI.Dispatching;
@@ -43,11 +42,9 @@ public partial class App : Application
             _host = Host.CreateDefaultBuilder()
                 .ConfigureServices((context, services) =>
                 {
-                    // Secure Storage & Core Services
-                    services.AddSingleton<IDataStore, DpapiDataStore>();
+                    // Core Services
                     services.AddSingleton<IAppLauncherService, AppLauncherService>();
                     services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
-                    services.AddSingleton<IGoogleOAuthSyncService, GoogleOAuthSyncService>();
                     services.AddSingleton<ICronSchedulerService, CronSchedulerService>();
                     services.AddSingleton<IUpdateService, UpdateService>();
 
@@ -56,7 +53,6 @@ public partial class App : Application
 
                     // ViewModels
                     services.AddSingleton<AgendaViewModel>();
-                    services.AddSingleton<SyncSettingsViewModel>();
                     services.AddSingleton<CronLauncherViewModel>();
                     services.AddSingleton<SettingsViewModel>();
                     services.AddSingleton<MainViewModel>();

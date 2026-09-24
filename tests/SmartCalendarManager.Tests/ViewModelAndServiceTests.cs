@@ -51,7 +51,7 @@ public class ViewModelAndServiceTests
         await vm.RefreshEventsCommand.ExecuteAsync(null);
 
         Assert.Empty(vm.TodayEvents);
-        Assert.Contains("No hay calendario configurado", vm.StatusMessage);
+        Assert.Contains("No hay calendarios configurados", vm.StatusMessage);
     }
 
     [Fact]
@@ -163,6 +163,7 @@ public class ViewModelAndServiceTests
         var mockUpdate = new Mock<IUpdateService>();
 
         mockCalendar.SetupGet(c => c.FilterSettings).Returns(new CalendarFilterSettings());
+        mockCalendar.SetupGet(c => c.Feeds).Returns(new List<CalendarFeed>());
         mockUpdate.SetupGet(u => u.CurrentAppVersion).Returns("1.0.0");
         mockUpdate.Setup(u => u.CheckForUpdatesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UpdateInfo
@@ -173,7 +174,8 @@ public class ViewModelAndServiceTests
                 DownloadUrl = "https://github.com/AnaCataVC/smart-calendar-manager/releases/download/v1.1.0/setup.exe"
             });
 
-        var vm = new SettingsViewModel(mockCalendar.Object, mockUpdate.Object);
+        var launcher = new Mock<IAppLauncherService>().Object;
+        var vm = new SettingsViewModel(mockCalendar.Object, mockUpdate.Object, launcher, new AgendaViewModel(mockCalendar.Object, launcher));
 
         await vm.CheckForUpdatesCommand.ExecuteAsync(null);
 
@@ -183,59 +185,25 @@ public class ViewModelAndServiceTests
     }
 
     [Fact]
-    public async Task SyncSettingsViewModel_ConnectAndSync_UpdatesProperties()
-    {
-        var mockSync = new Mock<IGoogleOAuthSyncService>();
-        var settings = new CalendarSyncSettings
-        {
-            ClientId = "id",
-            ClientSecret = "secret",
-            WorkCalendarId = "work@example.com"
-        };
-        mockSync.SetupGet(s => s.Settings).Returns(settings);
-        mockSync.Setup(s => s.AuthorizeAsync("id", "secret", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        mockSync.Setup(s => s.SynchronizeAvailabilityAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(3);
-
-        var vm = new SyncSettingsViewModel(mockSync.Object);
-
-        await vm.ConnectGoogleCommand.ExecuteAsync(null);
-        Assert.Contains("¡Cuenta de Google conectada", vm.StatusMessage);
-
-        await vm.SyncNowCommand.ExecuteAsync(null);
-        Assert.Contains("3 eventos procesados", vm.StatusMessage);
-    }
-
-    [Fact]
     public void MainViewModel_InitializesAllSubViewModels()
     {
         var mockCalendar = new Mock<IGoogleCalendarService>();
         var mockLauncher = new Mock<IAppLauncherService>();
-        var mockSync = new Mock<IGoogleOAuthSyncService>();
         var mockScheduler = new Mock<ICronSchedulerService>();
         var mockUpdate = new Mock<IUpdateService>();
 
         mockCalendar.SetupGet(c => c.FilterSettings).Returns(new CalendarFilterSettings());
-        mockSync.SetupGet(s => s.Settings).Returns(new CalendarSyncSettings());
+        mockCalendar.SetupGet(c => c.Feeds).Returns(new List<CalendarFeed>());
         mockScheduler.SetupGet(s => s.Rules).Returns(new List<CronLauncherRule>());
         mockUpdate.SetupGet(u => u.CurrentAppVersion).Returns("1.0.0");
 
         var agendaVm = new AgendaViewModel(mockCalendar.Object, mockLauncher.Object);
-        var syncVm = new SyncSettingsViewModel(mockSync.Object);
         var cronVm = new CronLauncherViewModel(mockScheduler.Object, mockLauncher.Object);
-        var settingsVm = new SettingsViewModel(mockCalendar.Object, mockUpdate.Object);
+        var settingsVm = new SettingsViewModel(mockCalendar.Object, mockUpdate.Object, mockLauncher.Object, agendaVm);
 
-        var mainVm = new MainViewModel(
-            agendaVm,
-            syncVm,
-            cronVm,
-            settingsVm,
-            mockCalendar.Object,
-            mockSync.Object);
+        var mainVm = new MainViewModel(agendaVm, cronVm, settingsVm);
 
         Assert.NotNull(mainVm.Agenda);
-        Assert.NotNull(mainVm.SyncSettings);
         Assert.NotNull(mainVm.CronLauncher);
         Assert.NotNull(mainVm.Settings);
     }

@@ -11,14 +11,12 @@
     <Grid>
         <NavigationView
             x:Name="NavView"
-            IsSettingsVisible="False"
+            IsSettingsVisible="True"
             PaneDisplayMode="Left"
             SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="Agenda Diaria" Tag="Agenda" Icon="Calendar" IsSelected="True" />
-                <NavigationViewItem Content="Sincronización Personal ➔ Laboral" Tag="Sync" Icon="Sync" />
-                <NavigationViewItem Content="Lanzador de Apps (Cron)" Tag="Cron" Icon="Play" />
-                <NavigationViewItem Content="Configuración" Tag="Settings" Icon="Setting" />
+                <NavigationViewItem Content="Agenda" Tag="Agenda" Icon="Calendar" IsSelected="True" />
+                <NavigationViewItem Content="Automatizaciones" Tag="Cron" Icon="Play" />
             </NavigationView.MenuItems>
 
             <!-- Pre-Meeting Dismissible Banner -->
@@ -84,10 +82,21 @@
 
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0">
                                         <TextBlock Text="{x:Bind Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{x:Bind StatusText}" FontSize="12" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Margin="0,2,0,0" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                                            <Border Padding="6,1" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                                <TextBlock Text="{x:Bind FeedTag}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            </Border>
+                                            <TextBlock Text="{x:Bind StatusText}" FontSize="12" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" />
+                                        </StackPanel>
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <Button
+                                            Content="Abrir Granola"
+                                            Visibility="{x:Bind InGranolaScope, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            Click="OpenGranola_Click"
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="Abre Granola y el enlace de la reunión si existe" />
                                         <Button
                                             Content="Unirse"
                                             Visibility="{x:Bind MeetingLink, Converter={StaticResource StringToVisibilityConverter}}"
@@ -109,35 +118,7 @@
                     </ListView>
                 </Grid>
 
-                <!-- 2. SYNC VIEW -->
-                <ScrollViewer x:Name="SyncSection" Grid.Row="1" Visibility="Collapsed">
-                    <StackPanel Spacing="16" MaxWidth="700" HorizontalAlignment="Left">
-                        <TextBlock Text="Bloqueo de Disponibilidad: Personal ➔ Laboral" FontSize="20" FontWeight="SemiBold" />
-                        <TextBlock Text="Crea automáticamente eventos de bloqueo ('🔒 Ocupada') en tu calendario laboral cuando tengas eventos en tu calendario personal, garantizando tu privacidad con OAuth 2.0 y SyncToken incremental." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-                        <Grid Padding="16" Margin="0,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
-                            <StackPanel Spacing="12">
-                                <TextBox Header="Google OAuth Client ID" Text="{x:Bind ViewModel.SyncSettings.ClientId, Mode=TwoWay}" PlaceholderText="apps.googleusercontent.com" />
-                                <PasswordBox Header="Google OAuth Client Secret" Password="{x:Bind ViewModel.SyncSettings.ClientSecret, Mode=TwoWay}" />
-                                <TextBox Header="ID de Calendario Laboral (Destino de bloqueos)" Text="{x:Bind ViewModel.SyncSettings.WorkCalendarId, Mode=TwoWay}" PlaceholderText="ej: trabajo@empresa.com o ID de calendario" />
-                                <TextBox Header="Título del Evento de Bloqueo" Text="{x:Bind ViewModel.SyncSettings.BlockTitle, Mode=TwoWay}" />
-                                <ToggleSwitch Header="Sincronización Automática en Segundo Plano" IsOn="{x:Bind ViewModel.SyncSettings.AutoSyncEnabled, Mode=TwoWay}" />
-
-                                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
-                                    <Button Content="Conectar Google" Command="{x:Bind ViewModel.SyncSettings.ConnectGoogleCommand}" />
-                                    <Button Content="Sincronizar Ahora" Command="{x:Bind ViewModel.SyncSettings.SyncNowCommand}" />
-                                    <Button Content="Desconectar" Command="{x:Bind ViewModel.SyncSettings.DisconnectGoogleCommand}" />
-                                    <ProgressRing IsActive="{x:Bind ViewModel.SyncSettings.IsBusy, Mode=OneWay}" Width="20" Height="20" />
-                                </StackPanel>
-
-                                <TextBlock Text="{x:Bind ViewModel.SyncSettings.StatusMessage, Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Margin="0,4,0,0" />
-                                <TextBlock Text="{x:Bind ViewModel.SyncSettings.LastSyncText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                            </StackPanel>
-                        </Grid>
-                    </StackPanel>
-                </ScrollViewer>
-
-                <!-- 3. CRON LAUNCHER VIEW -->
+                <!-- 2. AUTOMATIONS (CRON LAUNCHER) VIEW -->
                 <ScrollViewer x:Name="CronSection" Grid.Row="1" Visibility="Collapsed">
                     <StackPanel Spacing="16" MaxWidth="800" HorizontalAlignment="Left">
                         <TextBlock Text="Lanzador de Apps Programado (Cron Visual)" FontSize="20" FontWeight="SemiBold" />
@@ -198,26 +179,90 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- 4. SETTINGS VIEW -->
+                <!-- 3. SETTINGS VIEW -->
                 <ScrollViewer x:Name="SettingsSection" Grid.Row="1" Visibility="Collapsed">
                     <StackPanel Spacing="16" MaxWidth="700" HorizontalAlignment="Left">
-                        <TextBlock Text="Configuración del Calendario y Aplicación" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Configuración" FontSize="20" FontWeight="SemiBold" />
 
-                        <Grid Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                        <Expander Header="Calendarios (feeds iCal)" IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                             <StackPanel Spacing="12">
-                                <TextBlock Text="Feed iCal RFC 5545 Privado" FontWeight="SemiBold" FontSize="16" />
-                                <TextBox Header="URL del Feed iCal (.ics)" Text="{x:Bind ViewModel.Settings.ICalUrl, Mode=TwoWay}" PlaceholderText="https://calendar.google.com/calendar/ical/.../basic.ics" />
-                                <PasswordBox Header="Contraseña / Token HTTP Basic (Opcional)" Password="{x:Bind ViewModel.Settings.ICalKey, Mode=TwoWay}" />
+                                <TextBlock Text="Pega la dirección secreta en formato iCal de cada calendario (Google Calendar → Configuración del calendario → Integrar calendario). Marca como Personal los calendarios que no son del trabajo." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <ListView ItemsSource="{x:Bind ViewModel.Settings.Feeds}" SelectionMode="None">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="models:CalendarFeed">
+                                            <Grid Padding="8" ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{x:Bind KindLabel}" FontSize="12" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                                    <TextBlock Text="{x:Bind Url}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                </StackPanel>
+                                                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Enabled, Mode=TwoWay}" OnContent="Activo" OffContent="Inactivo" MinWidth="0" />
+                                                <Button Grid.Column="2" Content="Eliminar" Click="DeleteFeed_Click" Tag="{x:Bind}" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
 
-                                <TextBlock Text="Filtros de Eventos" FontWeight="SemiBold" FontSize="16" Margin="0,8,0,0" />
+                                <TextBlock Text="Agregar calendario" FontWeight="SemiBold" Margin="0,8,0,0" />
+                                <TextBox Header="Nombre" Text="{x:Bind ViewModel.Settings.NewFeedName, Mode=TwoWay}" PlaceholderText="ej: Trabajo, Gmail, Familia" />
+                                <TextBox Header="URL iCal secreta (.ics)" Text="{x:Bind ViewModel.Settings.NewFeedUrl, Mode=TwoWay}" PlaceholderText="https://calendar.google.com/calendar/ical/.../private-.../basic.ics" />
+                                <PasswordBox Header="Contraseña HTTP Basic (opcional, solo si el feed la exige)" Password="{x:Bind ViewModel.Settings.NewFeedKey, Mode=TwoWay}" />
+                                <ToggleSwitch Header="Tipo" IsOn="{x:Bind ViewModel.Settings.NewFeedIsPersonal, Mode=TwoWay}" OnContent="Personal" OffContent="Laboral" />
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Button Content="Agregar" Command="{x:Bind ViewModel.Settings.AddFeedCommand}" />
+                                    <ProgressRing IsActive="{x:Bind ViewModel.Settings.IsBusy, Mode=OneWay}" Width="20" Height="20" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Expander>
+
+                        <Expander Header="Granola" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Granola se abre 5 minutos antes de cada reunión elegible, y el botón Abrir Granola aparece en la agenda para esos eventos." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <ToggleSwitch Header="Aplicar Granola a" IsOn="{x:Bind ViewModel.Settings.GranolaIncludesPersonal, Mode=TwoWay}" OnContent="Calendarios laborales y personales" OffContent="Solo calendarios laborales" />
+                            </StackPanel>
+                        </Expander>
+
+                        <Expander Header="Filtros de eventos" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <StackPanel Spacing="12">
                                 <TextBox Header="Palabras Clave Excluidas (separadas por coma)" Text="{x:Bind ViewModel.Settings.ExcludedKeywords, Mode=TwoWay}" />
                                 <ToggleSwitch Header="Ignorar eventos de todo el día" IsOn="{x:Bind ViewModel.Settings.IgnoreAllDay, Mode=TwoWay}" />
                                 <ToggleSwitch Header="Exigir enlace de videoconferencia (Meet/Zoom/Teams)" IsOn="{x:Bind ViewModel.Settings.RequireLink, Mode=TwoWay}" />
-
-                                <Button Content="Guardar Configuración" Command="{x:Bind ViewModel.Settings.SaveCalendarSettingsCommand}" Margin="0,8,0,0" />
-                                <TextBlock Text="{x:Bind ViewModel.Settings.StatusMessage, Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
                             </StackPanel>
-                        </Grid>
+                        </Expander>
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Button Content="Guardar Configuración" Command="{x:Bind ViewModel.Settings.SaveCalendarSettingsCommand}" Style="{StaticResource AccentButtonStyle}" />
+                            <TextBlock Text="{x:Bind ViewModel.Settings.StatusMessage, Mode=OneWay}" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                        </StackPanel>
+
+                        <Expander Header="Bloqueo en calendario laboral (Apps Script)" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <StackPanel Spacing="12">
+                                <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="Este script crea eventos privados de bloqueo en tu calendario laboral cada vez que tienes algo en tus calendarios personales activos. Corre dentro de tu cuenta laboral en script.google.com; la app solo lo genera." />
+                                <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                           Text="Ojo: las URLs iCal secretas de tus calendarios personales quedan dentro del script en tu cuenta laboral. Los eventos recurrentes (RRULE) no se expanden: solo se considera su primera ocurrencia." />
+                                <TextBox Header="Título del evento de bloqueo" Text="{x:Bind ViewModel.Settings.BlockTitle, Mode=TwoWay}" />
+                                <TextBlock TextWrapping="Wrap">
+                                    <Run Text="1. Entra con tu cuenta laboral y abre script.google.com (nuevo proyecto)." /><LineBreak />
+                                    <Run Text="2. Copia el script de abajo y pégalo reemplazando el contenido de Código.gs." /><LineBreak />
+                                    <Run Text="3. Ejecuta la función syncBlocks una vez y acepta los permisos." /><LineBreak />
+                                    <Run Text="4. En Activadores, agrega uno para syncBlocks, basado en tiempo, cada 15 minutos." /><LineBreak />
+                                    <Run Text="5. Si agregas o quitas calendarios personales, vuelve a copiar el script." />
+                                </TextBlock>
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Button Content="Copiar script" Click="CopyScript_Click" />
+                                    <Button Content="Abrir script.google.com" Command="{x:Bind ViewModel.Settings.OpenScriptEditorCommand}" />
+                                </StackPanel>
+                                <TextBox Text="{x:Bind ViewModel.Settings.GeneratedScript, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                                         FontFamily="Consolas" FontSize="12" Height="280"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                            </StackPanel>
+                        </Expander>
 
                         <Grid Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                             <StackPanel Spacing="12">

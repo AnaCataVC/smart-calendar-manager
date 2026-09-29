@@ -273,6 +273,22 @@
 
                         <Grid Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                             <StackPanel Spacing="12">
+                                <TextBlock Text="Inicio con Windows" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock Text="Inicia Smart Calendar Manager automáticamente al encender el equipo para mantener el monitoreo de reuniones y automatizaciones activo en segundo plano." 
+                                           TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                                <ToggleSwitch Header="Iniciar automáticamente al iniciar sesión en Windows" 
+                                              IsOn="{x:Bind ViewModel.Settings.IsStartupEnabled, Mode=TwoWay}" />
+
+                                <ToggleSwitch Header="Iniciar minimizado en la bandeja del sistema" 
+                                              IsOn="{x:Bind ViewModel.Settings.LaunchMinimized, Mode=TwoWay}"
+                                              IsEnabled="{x:Bind ViewModel.Settings.IsStartupEnabled, Mode=OneWay}"
+                                              Margin="0,-4,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                            <StackPanel Spacing="12">
                                 <TextBlock Text="Actualizaciones de Software" FontWeight="SemiBold" FontSize="16" />
                                 <TextBlock Text="{x:Bind ViewModel.Settings.CurrentVersion, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 <Button Content="Buscar Actualizaciones" Command="{x:Bind ViewModel.Settings.CheckForUpdatesCommand}" />

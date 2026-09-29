@@ -68,6 +68,7 @@ public sealed partial class MainWindow : Window
         {
             AppWindow.Show();
             AppWindow.MoveInZOrderAtTop();
+            Activate();
         }
     }
 
@@ -75,6 +76,7 @@ public sealed partial class MainWindow : Window
     {
         AppWindow.Show();
         AppWindow.MoveInZOrderAtTop();
+        Activate();
     }
 
     private void HidePanel()

@@ -17,6 +17,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IUpdateService _updateService;
     private readonly IAppLauncherService _appLauncher;
     private readonly AgendaViewModel _agenda;
+    private readonly IStartupService? _startupService;
 
     public ObservableCollection<CalendarFeed> Feeds { get; } = new();
 
@@ -54,6 +55,12 @@ public partial class SettingsViewModel : ObservableObject
     private bool _requireLink = true;
 
     [ObservableProperty]
+    private bool _isStartupEnabled;
+
+    [ObservableProperty]
+    private bool _launchMinimized = true;
+
+    [ObservableProperty]
     private string _statusMessage = string.Empty;
 
     [ObservableProperty]
@@ -81,12 +88,20 @@ public partial class SettingsViewModel : ObservableObject
         IGoogleCalendarService calendarService,
         IUpdateService updateService,
         IAppLauncherService appLauncher,
-        AgendaViewModel agenda)
+        AgendaViewModel agenda,
+        IStartupService? startupService = null)
     {
         _calendarService = calendarService;
         _updateService = updateService;
         _appLauncher = appLauncher;
         _agenda = agenda;
+        _startupService = startupService;
+
+        if (_startupService != null)
+        {
+            _isStartupEnabled = _startupService.IsStartupEnabled;
+            _launchMinimized = _startupService.LaunchMinimized;
+        }
 
         foreach (var feed in _calendarService.Feeds)
         {
@@ -105,6 +120,30 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     partial void OnBlockTitleChanged(string value) => RegenerateScript();
+
+    partial void OnIsStartupEnabledChanged(bool value)
+    {
+        if (_startupService == null) return;
+        var success = _startupService.SetStartup(value, LaunchMinimized);
+        if (!success)
+        {
+            _isStartupEnabled = _startupService.IsStartupEnabled;
+            OnPropertyChanged(nameof(IsStartupEnabled));
+            StatusMessage = "No se pudo actualizar el inicio automático con Windows.";
+        }
+        else
+        {
+            StatusMessage = value
+                ? "Inicio automático con Windows activado."
+                : "Inicio automático desactivado.";
+        }
+    }
+
+    partial void OnLaunchMinimizedChanged(bool value)
+    {
+        if (_startupService == null || !IsStartupEnabled) return;
+        _startupService.SetStartup(true, value);
+    }
 
     private void RegenerateScript()
     {

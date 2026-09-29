@@ -26,6 +26,13 @@ Anyone with that URL can read the calendar. If it leaks, use *Reset* next to the
 - By default only events with a video meeting link (Google Meet, Zoom, Teams, Webex) in their location or description are eligible. Turn off *Abrir Granola solo si hay enlace de reunión* under *Filtros de eventos* to include events without a link.
 - The other event filters (excluded keywords, ignore all-day events) also decide which events open Granola automatically.
 
+## Windows Startup (Inicio con Windows)
+
+Under **Inicio con Windows** in the Settings tab, you can configure the app to start automatically whenever you log into Windows:
+
+- **Iniciar automáticamente al iniciar sesión en Windows:** Registers the application under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`. This does not require administrative privileges (UAC) and integrates cleanly with Windows 11 Task Manager Startup apps.
+- **Iniciar minimizado en la bandeja del sistema:** When enabled (default), the app launches in the background and stays in the System Tray with its background services active, without opening the main window on screen upon login.
+
 ## Blocking personal time on the work calendar
 
 Under *Bloqueo en calendario laboral (Apps Script)* the app generates a Google Apps Script that you run in your work account. It copies your enabled personal feeds as private busy blocks. Setup steps, behavior and limits are in [`work-calendar-apps-script.md`](work-calendar-apps-script.md). In short:

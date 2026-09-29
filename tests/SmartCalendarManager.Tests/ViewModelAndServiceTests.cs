@@ -207,4 +207,96 @@ public class ViewModelAndServiceTests
         Assert.NotNull(mainVm.CronLauncher);
         Assert.NotNull(mainVm.Settings);
     }
+
+    [Fact]
+    public void SettingsViewModel_StartupProperties_ReflectsInitialServiceState()
+    {
+        var mockCalendar = new Mock<IGoogleCalendarService>();
+        var mockUpdate = new Mock<IUpdateService>();
+        var mockLauncher = new Mock<IAppLauncherService>();
+        var mockStartup = new Mock<IStartupService>();
+
+        mockCalendar.SetupGet(c => c.FilterSettings).Returns(new CalendarFilterSettings());
+        mockCalendar.SetupGet(c => c.Feeds).Returns(new List<CalendarFeed>());
+        mockUpdate.SetupGet(u => u.CurrentAppVersion).Returns("1.0.0");
+        mockStartup.SetupGet(s => s.IsStartupEnabled).Returns(true);
+        mockStartup.SetupGet(s => s.LaunchMinimized).Returns(true);
+
+        var agendaVm = new AgendaViewModel(mockCalendar.Object, mockLauncher.Object);
+        var settingsVm = new SettingsViewModel(mockCalendar.Object, mockUpdate.Object, mockLauncher.Object, agendaVm, mockStartup.Object);
+
+        Assert.True(settingsVm.IsStartupEnabled);
+        Assert.True(settingsVm.LaunchMinimized);
+    }
+
+    [Fact]
+    public void SettingsViewModel_ToggleStartup_CallsSetStartupAndUpdatesStatus()
+    {
+        var mockCalendar = new Mock<IGoogleCalendarService>();
+        var mockUpdate = new Mock<IUpdateService>();
+        var mockLauncher = new Mock<IAppLauncherService>();
+        var mockStartup = new Mock<IStartupService>();
+
+        mockCalendar.SetupGet(c => c.FilterSettings).Returns(new CalendarFilterSettings());
+        mockCalendar.SetupGet(c => c.Feeds).Returns(new List<CalendarFeed>());
+        mockUpdate.SetupGet(u => u.CurrentAppVersion).Returns("1.0.0");
+        mockStartup.SetupGet(s => s.IsStartupEnabled).Returns(false);
+        mockStartup.SetupGet(s => s.LaunchMinimized).Returns(true);
+        mockStartup.Setup(s => s.SetStartup(true, true)).Returns(true);
+
+        var agendaVm = new AgendaViewModel(mockCalendar.Object, mockLauncher.Object);
+        var settingsVm = new SettingsViewModel(mockCalendar.Object, mockUpdate.Object, mockLauncher.Object, agendaVm, mockStartup.Object);
+
+        settingsVm.IsStartupEnabled = true;
+
+        mockStartup.Verify(s => s.SetStartup(true, true), Times.Once);
+        Assert.Contains("activado", settingsVm.StatusMessage);
+    }
+
+    [Fact]
+    public void SettingsViewModel_ToggleLaunchMinimized_CallsSetStartupWhenEnabled()
+    {
+        var mockCalendar = new Mock<IGoogleCalendarService>();
+        var mockUpdate = new Mock<IUpdateService>();
+        var mockLauncher = new Mock<IAppLauncherService>();
+        var mockStartup = new Mock<IStartupService>();
+
+        mockCalendar.SetupGet(c => c.FilterSettings).Returns(new CalendarFilterSettings());
+        mockCalendar.SetupGet(c => c.Feeds).Returns(new List<CalendarFeed>());
+        mockUpdate.SetupGet(u => u.CurrentAppVersion).Returns("1.0.0");
+        mockStartup.SetupGet(s => s.IsStartupEnabled).Returns(true);
+        mockStartup.SetupGet(s => s.LaunchMinimized).Returns(true);
+
+        var agendaVm = new AgendaViewModel(mockCalendar.Object, mockLauncher.Object);
+        var settingsVm = new SettingsViewModel(mockCalendar.Object, mockUpdate.Object, mockLauncher.Object, agendaVm, mockStartup.Object);
+
+        settingsVm.LaunchMinimized = false;
+
+        mockStartup.Verify(s => s.SetStartup(true, false), Times.Once);
+    }
+
+    [Fact]
+    public void SettingsViewModel_ToggleStartup_FailureRollsBackState()
+    {
+        var mockCalendar = new Mock<IGoogleCalendarService>();
+        var mockUpdate = new Mock<IUpdateService>();
+        var mockLauncher = new Mock<IAppLauncherService>();
+        var mockStartup = new Mock<IStartupService>();
+
+        mockCalendar.SetupGet(c => c.FilterSettings).Returns(new CalendarFilterSettings());
+        mockCalendar.SetupGet(c => c.Feeds).Returns(new List<CalendarFeed>());
+        mockUpdate.SetupGet(u => u.CurrentAppVersion).Returns("1.0.0");
+        mockStartup.SetupGet(s => s.IsStartupEnabled).Returns(false);
+        mockStartup.SetupGet(s => s.LaunchMinimized).Returns(true);
+        mockStartup.Setup(s => s.SetStartup(true, true)).Returns(false);
+
+        var agendaVm = new AgendaViewModel(mockCalendar.Object, mockLauncher.Object);
+        var settingsVm = new SettingsViewModel(mockCalendar.Object, mockUpdate.Object, mockLauncher.Object, agendaVm, mockStartup.Object);
+
+        settingsVm.IsStartupEnabled = true;
+
+        Assert.False(settingsVm.IsStartupEnabled);
+        Assert.Contains("No se pudo", settingsVm.StatusMessage);
+    }
 }
+

@@ -47,6 +47,8 @@ public partial class App : Application
                     services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
                     services.AddSingleton<ICronSchedulerService, CronSchedulerService>();
                     services.AddSingleton<IUpdateService, UpdateService>();
+                    services.AddSingleton<IStartupRegistrationProvider, Services.WindowsRegistryStartupProvider>();
+                    services.AddSingleton<IStartupService, StartupService>();
 
                     // Hosted Background Service
                     services.AddHostedService<CalendarSyncBackgroundService>();
@@ -89,8 +91,19 @@ public partial class App : Application
             Window = new MainWindow();
             LogTrace("MainWindow instantiated");
 
-            Window.Activate();
-            LogTrace("Window.Activate() executed");
+            var commandLineArgs = Environment.GetCommandLineArgs();
+            bool startMinimized = SmartCalendarManager.Core.Common.StartupArguments.ShouldStartMinimized(commandLineArgs);
+
+            if (startMinimized)
+            {
+                LogTrace("App started with minimized/startup flag. MainWindow remains hidden in system tray.");
+                Window.AppWindow.Hide();
+            }
+            else
+            {
+                Window.Activate();
+                LogTrace("Window.Activate() executed");
+            }
         }
         catch (Exception ex)
         {

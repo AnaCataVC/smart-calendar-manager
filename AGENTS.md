@@ -4,11 +4,16 @@ This document defines architecture invariants, development workflows, quality ga
 
 ---
 
-## 1. Release Invariant: Mandatory Setup Executable
+## 1. Release Invariant: Mandatory Setup Executable (Single Deliverable Policy)
 
 > [!IMPORTANT]
 > **Single Deliverable Rule for GitHub Releases:**
-> Every release published on GitHub **MUST ALWAYS** include the compiled installer executable (`SmartCalendarManager-Setup-vX.Y.Z.exe`) as an uploaded release asset. Releases without the Setup executable are strictly non-compliant and considered incomplete.
+> Every release published on GitHub **MUST ALWAYS** publish **ONLY** the official Windows Setup installer executable:
+> ```text
+> SmartCalendarManager-Setup-vX.Y.Z.exe
+> ```
+> - **Strict Prohibition on Extra Assets**: NEVER publish standalone portable executables (`.exe`), unpackaged binaries, or compressed archives (`.zip`) as GitHub Release assets. Production binaries compiled during build stages exist strictly to be packaged into the Setup installer or for test execution, never as independent downloads.
+> - **Verification Invariant**: All release workflows and subagents (`ami-release-manager`) must verify via `gh release view <tag> --json assets` that only the Setup executable is present. Releases without the Setup executable or containing portable/zip files are strictly non-compliant.
 
 ### Packaging Pipeline Specification
 1. **Version Bump Order:** Bump the version numbers in:

@@ -21,6 +21,7 @@ public interface IGoogleCalendarService : IDisposable
     HashSet<string> DismissedAlertIds { get; }
     IReadOnlyList<string> FailedFeedNames { get; }
     event EventHandler<CalendarEvent>? UpcomingMeetingDetected;
+    event EventHandler<IReadOnlyList<CalendarEvent>>? TodayEventsUpdated;
 
     Task<bool> IsValidFeedAsync(string url, string? authKey = null);
     void SaveFeeds(IEnumerable<CalendarFeed> feeds);
@@ -50,6 +51,7 @@ public class GoogleCalendarService : IGoogleCalendarService
     private readonly HttpMessageHandler? _httpHandler;
     private readonly ConcurrentBag<Timer> _activeTimers = new();
     private readonly HashSet<string> _dismissedAlertIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _triggeredOccurrenceKeys = new(StringComparer.OrdinalIgnoreCase);
 
     private List<CalendarFeed> _feeds = new();
     private List<string> _failedFeedNames = new();
@@ -62,6 +64,7 @@ public class GoogleCalendarService : IGoogleCalendarService
     public IReadOnlyList<string> FailedFeedNames => _failedFeedNames;
 
     public event EventHandler<CalendarEvent>? UpcomingMeetingDetected;
+    public event EventHandler<IReadOnlyList<CalendarEvent>>? TodayEventsUpdated;
 
     /// <param name="httpHandler">Optional transport override; null uses the default network stack.</param>
     public GoogleCalendarService(
@@ -229,7 +232,10 @@ public class GoogleCalendarService : IGoogleCalendarService
         if (enabledFeeds.Count == 0)
         {
             _failedFeedNames = new List<string>();
-            return new List<CalendarEvent>();
+            ClearAlerts();
+            var empty = new List<CalendarEvent>();
+            TodayEventsUpdated?.Invoke(this, empty);
+            return empty;
         }
 
         using var client = CreateConfiguredHttpClient();
@@ -252,6 +258,7 @@ public class GoogleCalendarService : IGoogleCalendarService
             result.Count, enabledFeeds.Count - _failedFeedNames.Count, result.Count(e => e.OpensGranola));
 
         ScheduleMeetingAlerts(result);
+        TodayEventsUpdated?.Invoke(this, result);
         return result;
     }
 
@@ -261,7 +268,8 @@ public class GoogleCalendarService : IGoogleCalendarService
         try
         {
             var icsContent = await DownloadFeedAsync(client, feed.Url, feed.AuthKey);
-            var events = ICalParser.ParseEventsForDate(icsContent, DateTime.Today);
+            var ownerEmail = ICalParser.ExtractOwnerEmailFromFeedUrl(feed.Url);
+            var events = ICalParser.ParseEventsForDate(icsContent, DateTime.Today, ownerEmail);
             foreach (var ev in events)
             {
                 ev.FeedKind = feed.Kind;
@@ -284,9 +292,9 @@ public class GoogleCalendarService : IGoogleCalendarService
         foreach (var meeting in events)
         {
             if (!meeting.OpensGranola) continue;
-            if (_dismissedAlertIds.Contains(meeting.Id))
+            if (_dismissedAlertIds.Contains(meeting.Id) || _triggeredOccurrenceKeys.ContainsKey(GetOccurrenceKey(meeting)))
             {
-                _logger.LogInformation("Skipping alert for dismissed meeting '{Title}'.", meeting.Title);
+                _logger.LogInformation("Skipping alert for already dismissed or triggered meeting '{Title}'.", meeting.Title);
                 continue;
             }
 
@@ -298,23 +306,69 @@ public class GoogleCalendarService : IGoogleCalendarService
                 _logger.LogInformation("Scheduling Granola alert for '{Title}' at {AlertTime} (in {DelayMinutes:F1} min).",
                     meeting.Title, granolaAlertTime, granolaDelay.TotalMinutes);
 
-                var granolaTimer = new Timer(_ =>
-                {
-                    _logger.LogInformation("Upcoming meeting alert fired for '{Title}'. Ensuring Granola is open...", meeting.Title);
-                    UpcomingMeetingDetected?.Invoke(this, meeting);
-                    _appLauncherService.EnsureGranolaRunning();
-                }, null, granolaDelay, Timeout.InfiniteTimeSpan);
+                var granolaTimer = new Timer(_ => _ = OnScheduledAlertTimerElapsedAsync(meeting),
+                    null, granolaDelay, Timeout.InfiniteTimeSpan);
 
                 _activeTimers.Add(granolaTimer);
             }
             else if (now >= granolaAlertTime && now < meeting.StartTime)
             {
                 _logger.LogInformation("Meeting '{Title}' starts within the Granola lead time. Ensuring Granola immediately.", meeting.Title);
-                UpcomingMeetingDetected?.Invoke(this, meeting);
-                _appLauncherService.EnsureGranolaRunning();
+                TriggerGranolaAlert(meeting);
             }
         }
     }
+
+    private async Task OnScheduledAlertTimerElapsedAsync(CalendarEvent scheduledMeeting)
+    {
+        try
+        {
+            if (IsConfigured)
+            {
+                var freshEvents = await GetTodayEventsAsync();
+                var currentMatch = freshEvents.FirstOrDefault(e =>
+                    string.Equals(e.Id, scheduledMeeting.Id, StringComparison.OrdinalIgnoreCase) &&
+                    e.StartTime == scheduledMeeting.StartTime);
+
+                if (currentMatch is not { OpensGranola: true })
+                {
+                    _logger.LogInformation(
+                        "Aborted Granola alert for '{Title}' ({StartTime}): event was cancelled, rescheduled, or declined.",
+                        scheduledMeeting.Title, scheduledMeeting.StartTime);
+                    return;
+                }
+
+                TriggerGranolaAlert(currentMatch);
+                return;
+            }
+
+            TriggerGranolaAlert(scheduledMeeting);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during live verification for meeting '{Title}'.", scheduledMeeting.Title);
+        }
+    }
+
+    private void TriggerGranolaAlert(CalendarEvent meeting)
+    {
+        if (!meeting.OpensGranola || _dismissedAlertIds.Contains(meeting.Id))
+        {
+            return;
+        }
+
+        if (!_triggeredOccurrenceKeys.TryAdd(GetOccurrenceKey(meeting), 0))
+        {
+            return;
+        }
+
+        _logger.LogInformation("Upcoming meeting alert fired for '{Title}'. Ensuring Granola is open...", meeting.Title);
+        UpcomingMeetingDetected?.Invoke(this, meeting);
+        _appLauncherService.EnsureGranolaRunning();
+    }
+
+    private static string GetOccurrenceKey(CalendarEvent meeting) =>
+        $"{meeting.Id}|{meeting.StartTime:O}";
 
     public void ClearAlerts()
     {

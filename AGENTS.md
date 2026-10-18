@@ -71,7 +71,17 @@ This document defines architecture invariants, development workflows, quality ga
 
 ---
 
-## 4. Git & Release Hygiene
+## 4. Calendar Engine & Pre-Meeting Automation Invariants
+
+- **Just-In-Time (JIT) Verification Gate:**
+  - Pre-meeting timers (`System.Threading.Timer`) MUST NEVER trigger external app launches (such as Granola) using stale cached snapshots.
+  - Upon timer expiration, the service must perform a live refresh against the feed to verify that the target event still exists today, retains the exact same `StartTime`, is not cancelled (`STATUS:CANCELLED`), and was not declined (`PARTSTAT=DECLINED`). If any attribute changed, the trigger must be aborted and timers rescheduled.
+- **RFC 5545 Millisecond Truncation in Unit Tests:**
+  - iCal `DTSTART`/`DTEND` timestamps have 1-second resolution (`yyyyMMddTHHmmss`) and discard millisecond fractions. Unit tests verifying timers or scheduled triggers must never use sub-second offsets (`AddMilliseconds`); always specify deltas of at least 1-2 whole seconds to prevent false triggers during setup.
+
+---
+
+## 5. Git & Release Hygiene
 
 - **Conventional Commits:** All commit messages must follow standard Conventional Commits format (`feat:`, `fix:`, `chore:`, `docs:`).
 - **No Internal Planning Leakage:** Commit messages, PR titles, and release notes must NEVER contain internal task labels or stage numbers (e.g., `Phase 1`, `Hito 2`, `Option A`).

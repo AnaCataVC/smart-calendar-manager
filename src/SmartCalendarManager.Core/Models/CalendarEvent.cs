@@ -65,6 +65,11 @@ public class CalendarEvent
     public bool IsAllDay { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the calendar owner declined attendance (PARTSTAT=DECLINED).
+    /// </summary>
+    public bool IsDeclined { get; set; }
+
+    /// <summary>
     /// Formatted start time string (e.g. 9:30 AM or Todo el día).
     /// </summary>
     public string FormattedStartTime => IsAllDay ? "Todo el día" : StartTime.ToString("h:mm tt");
@@ -96,6 +101,7 @@ public class CalendarEvent
     {
         get
         {
+            if (IsDeclined) return "No asistiré";
             if (IsInProgress) return "En curso";
             if (IsPast) return "Finalizada";
             return OpensGranola ? "Granola se abrirá antes de empezar" : "Solo en calendario";
@@ -119,6 +125,7 @@ public class CalendarEvent
                InGranolaScope == other.InGranolaScope &&
                FeedKind == other.FeedKind &&
                FeedName == other.FeedName &&
-               IsAllDay == other.IsAllDay;
+               IsAllDay == other.IsAllDay &&
+               IsDeclined == other.IsDeclined;
     }
 }

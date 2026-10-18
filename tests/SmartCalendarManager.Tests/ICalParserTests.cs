@@ -344,4 +344,96 @@ END:VCALENDAR";
         var expectedUtc = new DateTime(2026, 9, 10, 15, 0, 0, DateTimeKind.Utc);
         Assert.Equal(expectedUtc.ToLocalTime(), events[0].StartTime);
     }
+
+    [Theory]
+    [InlineData("https://calendar.google.com/calendar/ical/anacata%40company.com/private-abc123/basic.ics", "anacata@company.com")]
+    [InlineData("https://calendar.google.com/calendar/ical/user@gmail.com/public/basic.ics", "user@gmail.com")]
+    [InlineData("https://example.com/work.ics", null)]
+    [InlineData("", null)]
+    public void ExtractOwnerEmailFromFeedUrl_ShouldExtractDecodedEmailWhenGoogleUrl(string url, string? expected)
+    {
+        Assert.Equal(expected, ICalParser.ExtractOwnerEmailFromFeedUrl(url));
+    }
+
+    [Fact]
+    public void ParseEventsForDate_WhenOwnerAttendeeDeclined_ShouldMarkIsDeclinedTrue()
+    {
+        var today = new DateTime(2026, 10, 17);
+        string ics = @"BEGIN:VCALENDAR
+VERSION:2.0
+X-WR-CALNAME:cata@company.com
+BEGIN:VEVENT
+UID:declined-meeting@google.com
+DTSTART:20261017T140000
+DTEND:20261017T150000
+SUMMARY:Optional Sync
+LOCATION:https://meet.google.com/abc-defg-hij
+ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=Organizer:mailto:boss@company.com
+ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=DECLINED;CN=Cata:mailto:cata@company.com
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR";
+
+        var events = ICalParser.ParseEventsForDate(ics, today);
+
+        var ev = Assert.Single(events);
+        Assert.True(ev.IsDeclined);
+        Assert.Equal("No asistiré", ev.StatusText);
+    }
+
+    [Fact]
+    public void ParseEventsForDate_WhenOtherAttendeeDeclinedButOwnerAcceptedOrNeedsAction_ShouldMarkIsDeclinedFalse()
+    {
+        var today = new DateTime(2026, 10, 17);
+        string ics = @"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:active-meeting@google.com
+DTSTART:20261017T160000
+DTEND:20261017T170000
+SUMMARY:Team Sync
+LOCATION:https://meet.google.com/abc-defg-hij
+ATTENDEE;PARTSTAT=DECLINED:mailto:colleague@company.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:cata@company.com
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR";
+
+        var events = ICalParser.ParseEventsForDate(ics, today, ownerEmail: "cata@company.com");
+
+        var ev = Assert.Single(events);
+        Assert.False(ev.IsDeclined);
+    }
+
+    [Fact]
+    public void ParseEventsForDate_WhenRecurringInstanceDeclined_ShouldMarkOverrideAsDeclined()
+    {
+        var targetMonday = new DateTime(2026, 9, 7);
+        string ics = @"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-sync@google.com
+DTSTART:20260824T100000
+DTEND:20260824T110000
+RRULE:FREQ=WEEKLY;BYDAY=MO
+SUMMARY:Weekly Sync
+LOCATION:https://meet.google.com/abc-defg-hij
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly-sync@google.com
+RECURRENCE-ID:20260907T100000
+DTSTART:20260907T100000
+DTEND:20260907T110000
+SUMMARY:Weekly Sync
+LOCATION:https://meet.google.com/abc-defg-hij
+ATTENDEE;PARTSTAT=DECLINED:mailto:cata@company.com
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR";
+
+        var events = ICalParser.ParseEventsForDate(ics, targetMonday, ownerEmail: "cata@company.com");
+
+        var ev = Assert.Single(events);
+        Assert.True(ev.IsDeclined);
+    }
 }

@@ -49,7 +49,7 @@ public class CalendarFilterSettings
     /// </summary>
     public bool ShouldOpenGranola(CalendarEvent? calendarEvent)
     {
-        if (calendarEvent == null) return false;
+        if (calendarEvent == null || calendarEvent.IsDeclined) return false;
 
         if (!IsInGranolaScope(calendarEvent))
         {

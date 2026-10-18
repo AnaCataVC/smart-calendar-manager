@@ -153,4 +153,21 @@ public class CalendarFilterTests
         Assert.False(settings.ShouldOpenGranola(evtExcluded));
         Assert.True(settings.ShouldOpenGranola(evtAllowed));
     }
+
+    [Fact]
+    public void ShouldOpenGranola_DeclinedEvent_ShouldReturnFalse()
+    {
+        var settings = new CalendarFilterSettings();
+        var evt = new CalendarEvent
+        {
+            Title = "Sprint Planning",
+            StartTime = DateTime.Now.AddHours(1),
+            EndTime = DateTime.Now.AddHours(2),
+            MeetingLink = "https://meet.google.com/abc-defg-hij",
+            IsDeclined = true
+        };
+
+        Assert.False(settings.ShouldOpenGranola(evt));
+        Assert.Equal("No asistiré", evt.StatusText);
+    }
 }

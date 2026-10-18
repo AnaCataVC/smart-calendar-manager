@@ -17,6 +17,26 @@ public static partial class ICalParser
     [GeneratedRegex(@"https?:\/\/(?:[a-zA-Z0-9\-]+\.)?(?:meet\.google\.com|zoom\.us|teams\.microsoft\.com|teams\.live\.com|webex\.com)\/[^\s<""'>]+", RegexOptions.IgnoreCase)]
     private static partial Regex MeetingLinkRegex();
 
+    [GeneratedRegex(@"/calendar/ical/([^/]+)/", RegexOptions.IgnoreCase)]
+    private static partial Regex GoogleFeedOwnerRegex();
+
+    /// <summary>
+    /// Extracts the calendar owner email address from a Google Calendar iCal feed URL when present.
+    /// </summary>
+    public static string? ExtractOwnerEmailFromFeedUrl(string? feedUrl)
+    {
+        if (string.IsNullOrWhiteSpace(feedUrl)) return null;
+
+        var match = GoogleFeedOwnerRegex().Match(feedUrl);
+        if (!match.Success) return null;
+
+        var decoded = Uri.UnescapeDataString(match.Groups[1].Value).Trim();
+        return LooksLikeEmail(decoded) ? decoded : null;
+    }
+
+    private static bool LooksLikeEmail(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && value.Contains('@') && !value.Contains(' ');
+
     /// <summary>
     /// Unfolds multi-line strings in iCalendar format where lines beginning with space or tab continue the previous line.
     /// </summary>
@@ -70,17 +90,19 @@ public static partial class ICalParser
         public string? RRule { get; set; }
         public DateTime? RecurrenceId { get; set; }
         public List<DateTime> ExDates { get; } = new();
+        public List<(string Email, string PartStat)> Attendees { get; } = new();
     }
 
     /// <summary>
     /// Parses an iCalendar string and returns all valid events occurring on the specified date,
     /// evaluating recurring series (RRULE), single events, exceptions (RECURRENCE-ID), and exclusions (EXDATE),
-    /// while ignoring cancelled events and deduplicating instances.
+    /// while ignoring cancelled events, detecting declined attendance (PARTSTAT=DECLINED), and deduplicating instances.
     /// </summary>
-    public static List<CalendarEvent> ParseEventsForDate(string icsContent, DateTime targetDate)
+    public static List<CalendarEvent> ParseEventsForDate(string icsContent, DateTime targetDate, string? ownerEmail = null)
     {
         var lines = UnfoldLines(icsContent);
         var rawEvents = new List<RawVEvent>();
+        string? headerOwnerEmail = null;
 
         RawVEvent? currentEvent = null;
 
@@ -104,13 +126,22 @@ public static partial class ICalParser
                 continue;
             }
 
-            if (currentEvent == null) continue;
-
             int colonIdx = line.IndexOf(':');
             if (colonIdx <= 0) continue;
 
             string keyPart = line[..colonIdx].Trim();
             string valPart = line[(colonIdx + 1)..].Trim();
+
+            if (currentEvent == null)
+            {
+                if ((keyPart.StartsWith("X-WR-CALNAME", StringComparison.OrdinalIgnoreCase) ||
+                     keyPart.StartsWith("X-WR-CALID", StringComparison.OrdinalIgnoreCase)) &&
+                    LooksLikeEmail(valPart))
+                {
+                    headerOwnerEmail ??= valPart;
+                }
+                continue;
+            }
 
             if (keyPart.StartsWith("UID", StringComparison.OrdinalIgnoreCase))
             {
@@ -153,6 +184,17 @@ public static partial class ICalParser
                     }
                 }
             }
+            else if (keyPart.StartsWith("ATTENDEE", StringComparison.OrdinalIgnoreCase))
+            {
+                var partStat = ExtractParameter(keyPart, "PARTSTAT");
+                if (!string.IsNullOrWhiteSpace(partStat))
+                {
+                    var email = valPart.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
+                        ? valPart[7..].Trim()
+                        : (ExtractParameter(keyPart, "CN") ?? valPart);
+                    currentEvent.Attendees.Add((email, partStat));
+                }
+            }
             else if (keyPart.StartsWith("DTSTART", StringComparison.OrdinalIgnoreCase))
             {
                 if (keyPart.Contains("VALUE=DATE", StringComparison.OrdinalIgnoreCase) || valPart.Length == 8)
@@ -193,126 +235,110 @@ public static partial class ICalParser
 
         foreach (var ev in rawEvents)
         {
+            if (ev.Status.Equals("CANCELLED", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(ev.Id))
+                {
+                    eventMap.Remove(ev.Id);
+                }
+                continue;
+            }
+
             if (!ev.DtStart.HasValue) continue;
 
-            // 1. Instance override (RECURRENCE-ID)
-            if (ev.RecurrenceId.HasValue)
+            // 1. Instance override (RECURRENCE-ID) or 3. Normal single non-recurring event
+            if (ev.RecurrenceId.HasValue || string.IsNullOrWhiteSpace(ev.RRule))
             {
-                if (ev.Status.Equals("CANCELLED", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
                 var start = ev.DtStart.Value;
                 var end = ev.DtEnd ?? (ev.IsAllDay ? start.AddDays(1) : start.AddHours(1));
-
-                if (!ev.IsAllDay && start.TimeOfDay == TimeSpan.Zero && (end - start).TotalHours >= 23)
-                {
-                    ev.IsAllDay = true;
-                }
-
-                if (start.Date == targetDate.Date || (ev.IsAllDay && start.Date <= targetDate.Date && end.Date > targetDate.Date))
-                {
-                    var meetingLink = ExtractMeetingLink(ev.Location, ev.Description);
-                    string key = !string.IsNullOrWhiteSpace(ev.Id)
-                        ? ev.Id
-                        : $"{ev.Summary}_{start:yyyyMMddHHmm}";
-
-                    eventMap[key] = new CalendarEvent
-                    {
-                        Id = string.IsNullOrWhiteSpace(ev.Id) ? Guid.NewGuid().ToString() : ev.Id,
-                        Title = ev.Summary,
-                        StartTime = start,
-                        EndTime = end,
-                        MeetingLink = meetingLink,
-                        IsAllDay = ev.IsAllDay
-                    };
-                }
+                TryAddOccurrenceForTargetDate(eventMap, ev, start, end, targetDate, ownerEmail, headerOwnerEmail, overwriteExisting: true);
                 continue;
             }
 
             // 2. Master recurring event (RRULE)
-            if (!string.IsNullOrWhiteSpace(ev.RRule))
-            {
-                if (ev.Status.Equals("CANCELLED", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (!string.IsNullOrWhiteSpace(ev.Id) && overriddenOccurrences.Contains((ev.Id, targetDate.Date)))
-                {
-                    continue;
-                }
-
-                if (MatchesRecurrenceRule(ev.RRule, ev.DtStart.Value, targetDate))
-                {
-                    var start = ev.IsAllDay ? targetDate.Date : targetDate.Date + ev.DtStart.Value.TimeOfDay;
-                    var duration = (ev.DtEnd ?? (ev.IsAllDay ? ev.DtStart.Value.AddDays(1) : ev.DtStart.Value.AddHours(1))) - ev.DtStart.Value;
-                    var end = ev.IsAllDay ? targetDate.Date.AddDays(1) : start + duration;
-
-                    bool isAllDay = ev.IsAllDay;
-                    if (!isAllDay && start.TimeOfDay == TimeSpan.Zero && (end - start).TotalHours >= 23)
-                    {
-                        isAllDay = true;
-                    }
-
-                    var meetingLink = ExtractMeetingLink(ev.Location, ev.Description);
-                    string key = !string.IsNullOrWhiteSpace(ev.Id)
-                        ? ev.Id
-                        : $"{ev.Summary}_{start:yyyyMMddHHmm}";
-
-                    if (!eventMap.ContainsKey(key))
-                    {
-                        eventMap[key] = new CalendarEvent
-                        {
-                            Id = string.IsNullOrWhiteSpace(ev.Id) ? Guid.NewGuid().ToString() : ev.Id,
-                            Title = ev.Summary,
-                            StartTime = start,
-                            EndTime = end,
-                            MeetingLink = meetingLink,
-                            IsAllDay = isAllDay
-                        };
-                    }
-                }
-                continue;
-            }
-
-            // 3. Normal single non-recurring event
-            if (ev.Status.Equals("CANCELLED", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(ev.Id) && overriddenOccurrences.Contains((ev.Id, targetDate.Date)))
             {
                 continue;
             }
 
-            var singleStart = ev.DtStart.Value;
-            var singleEnd = ev.DtEnd ?? (ev.IsAllDay ? singleStart.AddDays(1) : singleStart.AddHours(1));
-
-            if (!ev.IsAllDay && singleStart.TimeOfDay == TimeSpan.Zero && (singleEnd - singleStart).TotalHours >= 23)
+            if (MatchesRecurrenceRule(ev.RRule!, ev.DtStart.Value, targetDate))
             {
-                ev.IsAllDay = true;
-            }
-
-            if (singleStart.Date == targetDate.Date || (ev.IsAllDay && singleStart.Date <= targetDate.Date && singleEnd.Date > targetDate.Date))
-            {
-                var meetingLink = ExtractMeetingLink(ev.Location, ev.Description);
-                string key = !string.IsNullOrWhiteSpace(ev.Id)
-                    ? ev.Id
-                    : $"{ev.Summary}_{singleStart:yyyyMMddHHmm}";
-
-                eventMap[key] = new CalendarEvent
-                {
-                    Id = string.IsNullOrWhiteSpace(ev.Id) ? Guid.NewGuid().ToString() : ev.Id,
-                    Title = ev.Summary,
-                    StartTime = singleStart,
-                    EndTime = singleEnd,
-                    MeetingLink = meetingLink,
-                    IsAllDay = ev.IsAllDay
-                };
+                var start = ev.IsAllDay ? targetDate.Date : targetDate.Date + ev.DtStart.Value.TimeOfDay;
+                var duration = (ev.DtEnd ?? (ev.IsAllDay ? ev.DtStart.Value.AddDays(1) : ev.DtStart.Value.AddHours(1))) - ev.DtStart.Value;
+                var end = ev.IsAllDay ? targetDate.Date.AddDays(1) : start + duration;
+                TryAddOccurrenceForTargetDate(eventMap, ev, start, end, targetDate, ownerEmail, headerOwnerEmail, overwriteExisting: false);
             }
         }
 
         var events = eventMap.Values.ToList();
         events.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
         return events;
+    }
+
+    private static void TryAddOccurrenceForTargetDate(
+        Dictionary<string, CalendarEvent> eventMap,
+        RawVEvent ev,
+        DateTime start,
+        DateTime end,
+        DateTime targetDate,
+        string? ownerEmail,
+        string? headerOwnerEmail,
+        bool overwriteExisting)
+    {
+        bool isAllDay = ev.IsAllDay || (start.TimeOfDay == TimeSpan.Zero && (end - start).TotalHours >= 23);
+        if (start.Date != targetDate.Date && !(isAllDay && start.Date <= targetDate.Date && end.Date > targetDate.Date))
+        {
+            return;
+        }
+
+        string key = !string.IsNullOrWhiteSpace(ev.Id)
+            ? ev.Id
+            : $"{ev.Summary}_{start:yyyyMMddHHmm}";
+
+        if (!overwriteExisting && eventMap.ContainsKey(key))
+        {
+            return;
+        }
+
+        eventMap[key] = new CalendarEvent
+        {
+            Id = string.IsNullOrWhiteSpace(ev.Id) ? Guid.NewGuid().ToString() : ev.Id,
+            Title = ev.Summary,
+            StartTime = start,
+            EndTime = end,
+            MeetingLink = ExtractMeetingLink(ev.Location, ev.Description),
+            IsAllDay = isAllDay,
+            IsDeclined = IsDeclinedByOwner(ev.Attendees, ownerEmail, headerOwnerEmail)
+        };
+    }
+
+    private static bool IsDeclinedByOwner(
+        List<(string Email, string PartStat)> attendees,
+        string? ownerEmail,
+        string? headerOwnerEmail)
+    {
+        if (attendees.Count == 0) return false;
+
+        foreach (var candidateOwner in new[] { ownerEmail, headerOwnerEmail })
+        {
+            if (string.IsNullOrWhiteSpace(candidateOwner)) continue;
+
+            foreach (var (email, partStat) in attendees)
+            {
+                if (email.Equals(candidateOwner.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return partStat.Equals("DECLINED", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
+
+        // Fallback when no feed owner email is available: if the sole attendee declined, treat as declined.
+        if (string.IsNullOrWhiteSpace(ownerEmail) && string.IsNullOrWhiteSpace(headerOwnerEmail) && attendees.Count == 1)
+        {
+            return attendees[0].PartStat.Equals("DECLINED", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -614,14 +640,17 @@ public static partial class ICalParser
     /// <summary>
     /// Extracts the TZID parameter value from an iCal property key part.
     /// </summary>
-    internal static string? ExtractTzid(string keyPart)
+    internal static string? ExtractTzid(string keyPart) => ExtractParameter(keyPart, "TZID");
+
+    internal static string? ExtractParameter(string keyPart, string paramName)
     {
+        var prefix = $"{paramName}=";
         var parts = keyPart.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         foreach (var part in parts)
         {
-            if (part.StartsWith("TZID=", StringComparison.OrdinalIgnoreCase))
+            if (part.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
-                return part[5..].Trim();
+                return part[prefix.Length..].Trim().Trim('"');
             }
         }
         return null;

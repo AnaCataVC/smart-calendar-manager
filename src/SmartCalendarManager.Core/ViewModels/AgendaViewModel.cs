@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -42,25 +44,33 @@ public partial class AgendaViewModel : ObservableObject
         _syncContext = disableSyncContext ? null : (syncContext ?? SynchronizationContext.Current);
 
         _calendarService.UpcomingMeetingDetected += OnUpcomingMeetingDetected;
+        _calendarService.TodayEventsUpdated += OnTodayEventsUpdated;
+    }
+
+    private void RunOnUiThread(Action action)
+    {
+        if (_syncContext != null && SynchronizationContext.Current != _syncContext)
+            _syncContext.Post(_ => action(), null);
+        else
+            action();
     }
 
     private void OnUpcomingMeetingDetected(object? sender, CalendarEvent ev)
     {
-        void UpdateBanner()
+        RunOnUiThread(() =>
         {
-            if (!_calendarService.DismissedAlertIds.Contains(ev.Id))
+            if (!_calendarService.DismissedAlertIds.Contains(ev.Id) && ev.OpensGranola)
             {
                 ActiveBannerEvent = ev;
                 IsBannerVisible = true;
             }
-        }
-
-        if (_syncContext != null)
-            _syncContext.Post(_ => UpdateBanner(), null);
-        else
-            UpdateBanner();
+        });
     }
 
+    private void OnTodayEventsUpdated(object? sender, IReadOnlyList<CalendarEvent> events)
+    {
+        RunOnUiThread(() => ApplyEvents(events));
+    }
 
     [RelayCommand]
     public async Task RefreshEventsAsync()
@@ -70,30 +80,7 @@ public partial class AgendaViewModel : ObservableObject
         try
         {
             var events = await _calendarService.GetTodayEventsAsync();
-            TodayEvents.Clear();
-            foreach (var ev in events)
-            {
-                TodayEvents.Add(ev);
-            }
-
-            if (TodayEvents.Count > 0)
-            {
-                StatusMessage = $"{TodayEvents.Count} reuniones encontradas para hoy";
-            }
-            else if (!_calendarService.IsConfigured)
-            {
-                StatusMessage = "No hay calendarios configurados. Ve a Configuración para agregar tus URLs iCal.";
-            }
-            else
-            {
-                StatusMessage = "No hay reuniones programadas para hoy";
-            }
-
-            var failed = _calendarService.FailedFeedNames;
-            if (failed is { Count: > 0 })
-            {
-                StatusMessage += $" (no se pudo leer: {string.Join(", ", failed)})";
-            }
+            ApplyEvents(events);
         }
         catch (Exception ex)
         {
@@ -102,6 +89,52 @@ public partial class AgendaViewModel : ObservableObject
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private void ApplyEvents(IReadOnlyList<CalendarEvent> events)
+    {
+        TodayEvents.Clear();
+        foreach (var ev in events)
+        {
+            TodayEvents.Add(ev);
+        }
+
+        if (IsBannerVisible && ActiveBannerEvent != null)
+        {
+            var matchingActive = TodayEvents.FirstOrDefault(e =>
+                string.Equals(e.Id, ActiveBannerEvent.Id, StringComparison.OrdinalIgnoreCase) &&
+                e.StartTime == ActiveBannerEvent.StartTime);
+
+            if (matchingActive is not { OpensGranola: true } ||
+                _calendarService.DismissedAlertIds.Contains(ActiveBannerEvent.Id))
+            {
+                IsBannerVisible = false;
+                ActiveBannerEvent = null;
+            }
+            else
+            {
+                ActiveBannerEvent = matchingActive;
+            }
+        }
+
+        if (TodayEvents.Count > 0)
+        {
+            StatusMessage = $"{TodayEvents.Count} reuniones encontradas para hoy";
+        }
+        else if (!_calendarService.IsConfigured)
+        {
+            StatusMessage = "No hay calendarios configurados. Ve a Configuración para agregar tus URLs iCal.";
+        }
+        else
+        {
+            StatusMessage = "No hay reuniones programadas para hoy";
+        }
+
+        var failed = _calendarService.FailedFeedNames;
+        if (failed is { Count: > 0 })
+        {
+            StatusMessage += $" (no se pudo leer: {string.Join(", ", failed)})";
         }
     }
 

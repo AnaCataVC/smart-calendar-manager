@@ -211,4 +211,87 @@ public class CalendarFeedTests : IDisposable
         launcher.Verify(l => l.OpenUrl("https://meet.google.com/abc"), Times.Once);
         launcher.Verify(l => l.OpenUrl(It.IsAny<string?>()), Times.Once);
     }
+
+    [Theory]
+    [InlineData("CANCELLED")]
+    [InlineData("RESCHEDULED")]
+    [InlineData("DECLINED")]
+    public async Task ScheduledTimer_WhenEventCancelledRescheduledOrDeclinedBeforeFiring_DoesNotOpenGranola(string changeMode)
+    {
+        // iCal DTSTART has 1-second resolution (yyyyMMddTHHmmss), so add 2 seconds to ensure alert time is in the future after truncation.
+        var start = DateTime.Now.AddMinutes(5).AddSeconds(2);
+        var end = start.AddMinutes(30);
+        const string feedUrl = "https://calendar.google.com/calendar/ical/cata%40work.com/private-1/basic.ics";
+
+        var feedsDict = new Dictionary<string, string>
+        {
+            [feedUrl] =
+                "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n" +
+                "UID:m-1\r\nSUMMARY:Sync\r\n" +
+                $"DTSTART:{start:yyyyMMddTHHmmss}\r\nDTEND:{end:yyyyMMddTHHmmss}\r\n" +
+                "LOCATION:https://meet.google.com/abc-defg-hij\r\n" +
+                "ATTENDEE;PARTSTAT=ACCEPTED:mailto:cata@work.com\r\n" +
+                "STATUS:CONFIRMED\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+        };
+
+        var launcher = new Mock<IAppLauncherService>();
+        var handler = new FakeFeedHandler(feedsDict);
+        using var service = new GoogleCalendarService(launcher.Object, NullLogger<GoogleCalendarService>.Instance, handler);
+        service.SaveFeeds(new[] { new CalendarFeed { Name = "Trabajo", Url = feedUrl, Kind = CalendarFeedKind.Work } });
+
+        // 1. Initial sync schedules the timer ~1-2s in the future
+        var initialEvents = await service.GetTodayEventsAsync();
+        Assert.Single(initialEvents);
+        Assert.True(initialEvents[0].OpensGranola);
+        launcher.Verify(l => l.EnsureGranolaRunning(), Times.Never);
+
+        // 2. Before the timer fires, the meeting is cancelled, moved of hour, or declined in the feed
+        feedsDict[feedUrl] = changeMode switch
+        {
+            "CANCELLED" =>
+                "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n" +
+                "UID:m-1\r\nSUMMARY:Sync\r\n" +
+                $"DTSTART:{start:yyyyMMddTHHmmss}\r\nDTEND:{end:yyyyMMddTHHmmss}\r\n" +
+                "STATUS:CANCELLED\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+            "RESCHEDULED" =>
+                "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n" +
+                "UID:m-1\r\nSUMMARY:Sync\r\n" +
+                $"DTSTART:{start.AddHours(2):yyyyMMddTHHmmss}\r\nDTEND:{end.AddHours(2):yyyyMMddTHHmmss}\r\n" +
+                "LOCATION:https://meet.google.com/abc-defg-hij\r\n" +
+                "STATUS:CONFIRMED\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+            _ =>
+                "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n" +
+                "UID:m-1\r\nSUMMARY:Sync\r\n" +
+                $"DTSTART:{start:yyyyMMddTHHmmss}\r\nDTEND:{end:yyyyMMddTHHmmss}\r\n" +
+                "LOCATION:https://meet.google.com/abc-defg-hij\r\n" +
+                "ATTENDEE;PARTSTAT=DECLINED:mailto:cata@work.com\r\n" +
+                "STATUS:CONFIRMED\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+        };
+
+        await Task.Delay(2300);
+
+        launcher.Verify(l => l.EnsureGranolaRunning(), Times.Never);
+    }
+
+    [Fact]
+    public void AgendaViewModel_WhenBannerEventIsCancelledMovedOrDeclinedOnUpdate_HidesBannerAutomatically()
+    {
+        var calendar = new Mock<IGoogleCalendarService>();
+        var launcher = new Mock<IAppLauncherService>();
+        calendar.SetupGet(c => c.DismissedAlertIds).Returns(new HashSet<string>());
+
+        var vm = new AgendaViewModel(calendar.Object, launcher.Object, disableSyncContext: true);
+        var originalStart = DateTime.Today.AddHours(10);
+        var ev = new CalendarEvent { Id = "m-1", Title = "Standup", StartTime = originalStart, EndTime = originalStart.AddMinutes(30), OpensGranola = true };
+
+        calendar.Raise(c => c.UpcomingMeetingDetected += null, calendar.Object, ev);
+        Assert.True(vm.IsBannerVisible);
+
+        // Event moved to 11:00 -> banner for 10:00 should close
+        var movedEv = new CalendarEvent { Id = "m-1", Title = "Standup", StartTime = originalStart.AddHours(1), EndTime = originalStart.AddHours(1.5), OpensGranola = true };
+        calendar.Raise(c => c.TodayEventsUpdated += null, calendar.Object, (IReadOnlyList<CalendarEvent>)new List<CalendarEvent> { movedEv });
+
+        Assert.False(vm.IsBannerVisible);
+        Assert.Null(vm.ActiveBannerEvent);
+    }
 }

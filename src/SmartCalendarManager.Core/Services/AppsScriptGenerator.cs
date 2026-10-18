@@ -77,26 +77,34 @@ public static class AppsScriptGenerator
         function parseEvents(ics) {
           const lines = ics.replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
           const events = [];
+          let calOwner = null;
           let cur = null;
           lines.forEach(line => {
             if (line === 'BEGIN:VEVENT') { cur = {}; return; }
             if (line === 'END:VEVENT') {
-              if (cur && cur.start && !cur.cancelled) {
+              if (cur && cur.start && !cur.cancelled && !cur.declined) {
                 if (!cur.end) cur.end = new Date(cur.start.getTime() + (cur.allDay ? 86400000 : 0));
                 events.push(cur);
               }
               cur = null;
               return;
             }
-            if (!cur) return;
             const i = line.indexOf(':');
             if (i < 0) return;
             const head = line.slice(0, i);
             const value = line.slice(i + 1).trim();
             const name = head.split(';')[0].toUpperCase();
+            if (!cur) {
+              if ((name === 'X-WR-CALNAME' || name === 'X-WR-CALID') && value.indexOf('@') > 0) calOwner = value.toLowerCase();
+              return;
+            }
             if (name === 'DTSTART') { cur.start = parseDate(head, value); cur.allDay = /^\d{8}$/.test(value); }
             else if (name === 'DTEND') cur.end = parseDate(head, value);
             else if (name === 'STATUS' && value.toUpperCase() === 'CANCELLED') cur.cancelled = true;
+            else if (name === 'ATTENDEE' && /PARTSTAT="?DECLINED"?/i.test(head)) {
+              const email = value.replace(/^mailto:/i, '').trim().toLowerCase();
+              if (!calOwner || email === calOwner) cur.declined = true;
+            }
           });
           return events;
         }

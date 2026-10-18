@@ -9,7 +9,7 @@ namespace SmartCalendarManager.Core.Services;
 public class CalendarSyncBackgroundService : BackgroundService
 {
     // Keeps the pre-meeting Granola timers fresh when events change during the day.
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(5);
 
     private readonly IGoogleCalendarService _calendarService;
     private readonly ICronSchedulerService _cronScheduler;

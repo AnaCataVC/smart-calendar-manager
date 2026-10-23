@@ -68,6 +68,9 @@ This document defines architecture invariants, development workflows, quality ga
   - Never bind `PasswordBox.Password` using `x:Bind Mode=TwoWay` (use code-behind or helper).
   - Avoid dual bindings (`SelectedItem` and `Text` both TwoWay) on editable `ComboBox`.
   - Initialize `App.DispatcherQueue` before instantiating `MainWindow`.
+- **System Tray & Window Lifecycle Invariants:**
+  - In WinUI 3, `{x:Bind}` on a `Window` class only evaluates on `Window.Activated`. When launching minimized directly to the system tray (`AppWindow.Hide()`), `Window.Activate()` is never called, leaving `{x:Bind}` expressions uninitialized (`null`).
+  - `MainWindow` must call `Bindings.Initialize()` explicitly in its constructor and assign `Command` and `Click` handlers directly in C# code-behind for tray context menu items to guarantee compatibility with native Win32 popup dispatching (`H.NotifyIcon`).
 
 ---
 

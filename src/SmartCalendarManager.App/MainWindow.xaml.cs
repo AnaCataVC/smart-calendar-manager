@@ -19,8 +19,6 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         App.LogTrace("MainWindow constructor started");
-        InitializeComponent();
-        App.LogTrace("MainWindow InitializeComponent completed");
 
         ShowPanelCommand = new RelayCommand(ShowPanel);
         HidePanelCommand = new RelayCommand(HidePanel);
@@ -30,6 +28,30 @@ public sealed partial class MainWindow : Window
             await mainVm.Agenda.RefreshEventsAsync();
         });
         ExitCommand = new RelayCommand(ExitApplication);
+
+        InitializeComponent();
+        App.LogTrace("MainWindow InitializeComponent completed");
+
+        // Force early bindings initialization even when started minimized without Window.Activate()
+        Bindings.Initialize();
+        App.LogTrace("MainWindow Bindings initialized");
+
+        // Explicit command and click bindings for reliable Win32 native tray interop
+        OpenMenuItem.Command = ShowPanelCommand;
+        OpenMenuItem.Click += (s, e) => ShowPanel();
+
+        SyncMenuItem.Command = SyncNowCommand;
+        SyncMenuItem.Click += async (s, e) =>
+        {
+            var mainVm = App.GetService<MainViewModel>();
+            await mainVm.Agenda.RefreshEventsAsync();
+        };
+
+        MinimizeMenuItem.Command = HidePanelCommand;
+        MinimizeMenuItem.Click += (s, e) => HidePanel();
+
+        ExitMenuItem.Command = ExitCommand;
+        ExitMenuItem.Click += (s, e) => ExitApplication();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);

@@ -25,23 +25,35 @@
             ToolTipText="Smart Calendar Manager">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
-                    <MenuFlyoutItem Text="Abrir Smart Calendar" Command="{x:Bind ShowPanelCommand}">
+                    <MenuFlyoutItem
+                        x:Name="OpenMenuItem"
+                        Text="Abrir Smart Calendar"
+                        Command="{x:Bind ShowPanelCommand}">
                         <MenuFlyoutItem.Icon>
                             <FontIcon Glyph="&#xE737;" />
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Sincronizar ahora" Command="{x:Bind SyncNowCommand}">
+                    <MenuFlyoutItem
+                        x:Name="SyncMenuItem"
+                        Text="Sincronizar ahora"
+                        Command="{x:Bind SyncNowCommand}">
                         <MenuFlyoutItem.Icon>
                             <FontIcon Glyph="&#xE72C;" />
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Minimizar a la bandeja" Command="{x:Bind HidePanelCommand}">
+                    <MenuFlyoutItem
+                        x:Name="MinimizeMenuItem"
+                        Text="Minimizar a la bandeja"
+                        Command="{x:Bind HidePanelCommand}">
                         <MenuFlyoutItem.Icon>
                             <FontIcon Glyph="&#xE738;" />
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Salir" Command="{x:Bind ExitCommand}">
+                    <MenuFlyoutItem
+                        x:Name="ExitMenuItem"
+                        Text="Salir"
+                        Command="{x:Bind ExitCommand}">
                         <MenuFlyoutItem.Icon>
                             <FontIcon Glyph="&#xE7E8;" />
                         </MenuFlyoutItem.Icon>

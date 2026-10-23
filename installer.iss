@@ -1,6 +1,6 @@
 ; Inno Setup Script for Smart Calendar Manager
 #define MyAppName "Smart Calendar Manager"
-#define MyAppVersion "1.4.0"
+#define MyAppVersion "1.4.1"
 #define MyAppPublisher "AnaCataVC"
 #define MyAppExeName "SmartCalendarManager.App.exe"
 

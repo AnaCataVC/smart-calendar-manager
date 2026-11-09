@@ -8,15 +8,14 @@ This document defines architecture invariants, development workflows, quality ga
 
 > [!IMPORTANT]
 > **Single Deliverable Rule for GitHub Releases:**
-> Every release published on GitHub **MUST ALWAYS** publish the official Windows Setup installer executable along with its cryptographic SHA-256 hash:
+> Every release published on GitHub **MUST ALWAYS** publish **ONLY** the official Windows Setup installer executable:
 > ```text
 > SmartCalendarManager-Setup-vX.Y.Z.exe
-> SmartCalendarManager-Setup-vX.Y.Z.exe.sha256
 > ```
-> - **Automated Release via CI/CD**: Pushing a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) automatically triggers `.github/workflows/release.yml` on `windows-latest`, which tests, publishes the self-contained app, compiles Inno Setup with `/DMyAppVersion=X.Y.Z`, computes the `.sha256` checksum, and creates the GitHub Release with release notes.
+> - **Automated Release via CI/CD**: Pushing a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) automatically triggers `.github/workflows/release.yml` on `windows-latest`. The workflow tests, publishes the self-contained app, compiles Inno Setup with `/DMyAppVersion=X.Y.Z`, and creates the GitHub Release with release notes.
 > - **Inno Setup Macro Standard**: `installer.iss` MUST define `MyAppVersion` within `#ifndef MyAppVersion` so CI CLI arguments override the version dynamically without file mutations.
-> - **Strict Prohibition on Extra Assets**: NEVER publish standalone portable executables (`.exe`), unpackaged binaries, or compressed archives (`.zip`) as GitHub Release assets. Production binaries compiled during build stages exist strictly to be packaged into the Setup installer or for test execution, never as independent downloads.
-> - **Verification Invariant**: All release workflows and subagents (`ami-release-manager`) must verify via `gh release view <tag> --json assets` that only the Setup executable and its `.sha256` hash are present. Releases lacking the Setup executable or containing portable/zip files are strictly non-compliant.
+> - **Strict Prohibition on Extra Assets**: NEVER publish standalone portable executables (`.exe`), unpackaged binaries, compressed archives (`.zip`), or auxiliary checksum text files (`.sha256`) as GitHub Release assets (GitHub natively calculates and displays the SHA-256 digest on the web UI).
+> - **Verification Invariant**: All release workflows and subagents (`ami-release-manager`) must verify via `gh release view <tag> --json assets` that exactly 1 asset exists: `SmartCalendarManager-Setup-vX.Y.Z.exe`. Releases lacking the Setup executable or containing auxiliary/portable/zip files are strictly non-compliant.
 
 ### Packaging Pipeline Specification
 1. **Version Bump Order:** Bump the version numbers in:
@@ -38,11 +37,10 @@ This document defines architecture invariants, development workflows, quality ga
    - Installer Packaging (Inno Setup):
      ```powershell
      & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=X.Y.Z installer.iss
-     Get-FileHash releases\SmartCalendarManager-Setup-vX.Y.Z.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" } | Out-File -Encoding ascii releases\SmartCalendarManager-Setup-vX.Y.Z.exe.sha256
      ```
 4. **Asset Verification Gate:**
    - Execute `gh release view vX.Y.Z --json assets`.
-   - Verify that `assets.Count >= 2` and `SmartCalendarManager-Setup-vX.Y.Z.exe` + `.sha256` are present with state `uploaded`.
+   - Verify that `assets.Count == 1` and `SmartCalendarManager-Setup-vX.Y.Z.exe` is present with state `uploaded`.
 5. **Local Artifact Cleanliness:**
    - Immediately purge local `releases/` directory contents post-upload to avoid disk bloat:
      ```powershell

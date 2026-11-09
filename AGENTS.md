@@ -8,37 +8,42 @@ This document defines architecture invariants, development workflows, quality ga
 
 > [!IMPORTANT]
 > **Single Deliverable Rule for GitHub Releases:**
-> Every release published on GitHub **MUST ALWAYS** publish **ONLY** the official Windows Setup installer executable:
+> Every release published on GitHub **MUST ALWAYS** publish the official Windows Setup installer executable along with its cryptographic SHA-256 hash:
 > ```text
 > SmartCalendarManager-Setup-vX.Y.Z.exe
+> SmartCalendarManager-Setup-vX.Y.Z.exe.sha256
 > ```
+> - **Automated Release via CI/CD**: Pushing a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) automatically triggers `.github/workflows/release.yml` on `windows-latest`, which tests, publishes the self-contained app, compiles Inno Setup with `/DMyAppVersion=X.Y.Z`, computes the `.sha256` checksum, and creates the GitHub Release with release notes.
+> - **Inno Setup Macro Standard**: `installer.iss` MUST define `MyAppVersion` within `#ifndef MyAppVersion` so CI CLI arguments override the version dynamically without file mutations.
 > - **Strict Prohibition on Extra Assets**: NEVER publish standalone portable executables (`.exe`), unpackaged binaries, or compressed archives (`.zip`) as GitHub Release assets. Production binaries compiled during build stages exist strictly to be packaged into the Setup installer or for test execution, never as independent downloads.
-> - **Verification Invariant**: All release workflows and subagents (`ami-release-manager`) must verify via `gh release view <tag> --json assets` that only the Setup executable is present. Releases without the Setup executable or containing portable/zip files are strictly non-compliant.
+> - **Verification Invariant**: All release workflows and subagents (`ami-release-manager`) must verify via `gh release view <tag> --json assets` that only the Setup executable and its `.sha256` hash are present. Releases lacking the Setup executable or containing portable/zip files are strictly non-compliant.
 
 ### Packaging Pipeline Specification
 1. **Version Bump Order:** Bump the version numbers in:
    - `src/SmartCalendarManager.App/SmartCalendarManager.App.csproj` (`<Version>`, `<AssemblyVersion>`, `<FileVersion>`)
    - `src/SmartCalendarManager.Core/SmartCalendarManager.Core.csproj` (`<Version>`, `<AssemblyVersion>`, `<FileVersion>`)
-   - `installer.iss` (`#define MyAppVersion "X.Y.Z"`)
-   *Always commit and push version bumps prior to tag creation or binary publication.*
-2. **Binary Compilation (`win-x64` self-contained):**
+   - `installer.iss` (`#ifndef MyAppVersion #define MyAppVersion "X.Y.Z" #endif`)
+   *Always commit and push version bumps prior to tag creation.*
+2. **Automated Remote Release (Recommended):**
    ```powershell
-   dotnet publish src\SmartCalendarManager.App\SmartCalendarManager.App.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -o releases\SmartCalendarManager-win-x64
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   gh run watch (gh run list --workflow=release.yml --limit 1 --json databaseId -q '.[0].databaseId')
    ```
-3. **Installer Packaging (Inno Setup):**
-   - Use Inno Setup compiler (`ISCC.exe` located at `"$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"` or in `Program Files`):
+3. **Local Compilation & Packaging (Fallback):**
+   - Binary Compilation (`win-x64` self-contained):
      ```powershell
-     & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer.iss
+     dotnet publish src\SmartCalendarManager.App\SmartCalendarManager.App.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -o releases\SmartCalendarManager-win-x64
      ```
-   - Target output: `releases\SmartCalendarManager-Setup-vX.Y.Z.exe`.
-4. **Release Asset Upload:**
-   ```powershell
-   gh release upload vX.Y.Z "releases\SmartCalendarManager-Setup-vX.Y.Z.exe" --clobber
-   ```
-5. **Asset Verification Gate:**
+   - Installer Packaging (Inno Setup):
+     ```powershell
+     & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=X.Y.Z installer.iss
+     Get-FileHash releases\SmartCalendarManager-Setup-vX.Y.Z.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" } | Out-File -Encoding ascii releases\SmartCalendarManager-Setup-vX.Y.Z.exe.sha256
+     ```
+4. **Asset Verification Gate:**
    - Execute `gh release view vX.Y.Z --json assets`.
-   - Verify that `assets.Count > 0` and `SmartCalendarManager-Setup-vX.Y.Z.exe` is present with state `uploaded`.
-6. **Local Artifact Cleanliness:**
+   - Verify that `assets.Count >= 2` and `SmartCalendarManager-Setup-vX.Y.Z.exe` + `.sha256` are present with state `uploaded`.
+5. **Local Artifact Cleanliness:**
    - Immediately purge local `releases/` directory contents post-upload to avoid disk bloat:
      ```powershell
      Remove-Item -Recurse -Force releases\* -ErrorAction SilentlyContinue

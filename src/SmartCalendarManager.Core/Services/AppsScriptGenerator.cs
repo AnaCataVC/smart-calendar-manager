@@ -26,9 +26,9 @@ public static class AppsScriptGenerator
         var urlsLiteral = JsonSerializer.Serialize(urls, JsLiteralOptions);
         var titleLiteral = JsonSerializer.Serialize(blockTitle, JsLiteralOptions);
 
-        return $"const ICAL_URLS = {urlsLiteral};\n"
+        return ($"const ICAL_URLS = {urlsLiteral};\n"
              + $"const BLOCK_TITLE = {titleLiteral};\n"
-             + ScriptBody;
+             + ScriptBody).Replace("\r", "");
     }
 
     private const string ScriptBody = """

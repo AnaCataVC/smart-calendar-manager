@@ -15,6 +15,22 @@ public enum GranolaScope
 public class CalendarFilterSettings
 {
     public const string DefaultExcludedKeywords = "[Personal], [Privado], Out of office, Fuera de la oficina, OOO, Vacaciones, Focus time";
+    public const string DefaultAppsToClose = "Spotify";
+
+    /// <summary>
+    /// Gets or sets whether applications should be automatically closed before eligible meetings.
+    /// </summary>
+    public bool CloseAppsBeforeMeetingEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the delimiter-separated list of process names to close before meetings (e.g. "Spotify, Discord").
+    /// </summary>
+    public string AppsToClose { get; set; } = DefaultAppsToClose;
+
+    /// <summary>
+    /// Gets or sets how many minutes before an eligible meeting the configured apps should be closed.
+    /// </summary>
+    public int CloseAppsLeadMinutes { get; set; } = 1;
 
     /// <summary>
     /// Gets or sets the comma-separated list of keywords or prefixes that disqualify an event from triggering actions.
@@ -43,6 +59,19 @@ public class CalendarFilterSettings
 
     public bool IsInGranolaScope(CalendarEvent calendarEvent) =>
         GranolaScope == GranolaScope.All || calendarEvent.FeedKind == CalendarFeedKind.Work;
+
+    /// <summary>
+    /// Evaluates a calendar event against filter rules to determine if configured apps should be closed.
+    /// </summary>
+    public bool ShouldCloseApps(CalendarEvent? calendarEvent)
+    {
+        if (!CloseAppsBeforeMeetingEnabled || string.IsNullOrWhiteSpace(AppsToClose))
+        {
+            return false;
+        }
+
+        return ShouldOpenGranola(calendarEvent);
+    }
 
     /// <summary>
     /// Evaluates a calendar event against the current filter rules to determine if Granola should be automatically opened.

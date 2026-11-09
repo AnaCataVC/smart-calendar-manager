@@ -38,6 +38,11 @@ public class CalendarEvent
     public bool OpensGranola { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets whether this event qualifies for closing configured applications pre-meeting.
+    /// </summary>
+    public bool ClosesApps { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets whether the event belongs to a feed covered by the Granola scope (shows the agenda button).
     /// </summary>
     public bool InGranolaScope { get; set; } = true;

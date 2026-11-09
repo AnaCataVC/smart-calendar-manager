@@ -242,6 +242,16 @@
                             </StackPanel>
                         </Expander>
 
+                        <Expander Header="Cierre de aplicaciones antes de reuniones" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Cierra automáticamente aplicaciones que reproduzcan sonido o generen distracciones (ej: Spotify, Discord, Steam) antes de que empiece tu reunión." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <ToggleSwitch Header="Cerrar aplicaciones antes de la reunión" IsOn="{x:Bind ViewModel.Settings.CloseAppsBeforeMeeting, Mode=TwoWay}" />
+                                <TextBox Header="Aplicaciones a cerrar (separadas por coma)" Text="{x:Bind ViewModel.Settings.AppsToClose, Mode=TwoWay}" PlaceholderText="ej: Spotify, Discord, Steam" />
+                                <NumberBox Header="Minutos de anticipación" Value="{x:Bind ViewModel.Settings.CloseAppsLeadMinutes, Mode=TwoWay}" Minimum="0" Maximum="60" SpinButtonPlacementMode="Inline" HorizontalAlignment="Left" />
+                                <Button Content="Probar cierre de aplicaciones ahora" Command="{x:Bind ViewModel.Settings.TestCloseAppsCommand}" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Expander>
+
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <Button Content="Guardar Configuración" Command="{x:Bind ViewModel.Settings.SaveCalendarSettingsCommand}" Style="{StaticResource AccentButtonStyle}" />
                             <TextBlock Text="{x:Bind ViewModel.Settings.StatusMessage, Mode=OneWay}" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />

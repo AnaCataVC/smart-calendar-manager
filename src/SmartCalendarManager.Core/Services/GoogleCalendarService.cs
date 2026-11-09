@@ -44,14 +44,19 @@ public class GoogleCalendarService : IGoogleCalendarService
     private const string CalendarRequireMeetingLinkKey = "GranolaRequireMeetingLink";
     private const string GranolaLeadMinutesKey = "GranolaLeadMinutes";
     private const string GranolaScopeKey = "GranolaScope";
+    private const string CalendarCloseAppsEnabledKey = "CalendarCloseAppsEnabled";
+    private const string CalendarAppsToCloseKey = "CalendarAppsToClose";
+    private const string CalendarCloseAppsLeadMinutesKey = "CalendarCloseAppsLeadMinutes";
     private const string DismissedAlertsKey = "CalendarDismissedAlerts";
 
     private readonly IAppLauncherService _appLauncherService;
+    private readonly IAppCloserService? _appCloserService;
     private readonly ILogger<GoogleCalendarService> _logger;
     private readonly HttpMessageHandler? _httpHandler;
     private readonly ConcurrentBag<Timer> _activeTimers = new();
     private readonly HashSet<string> _dismissedAlertIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _triggeredOccurrenceKeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _triggeredCloseAppsKeys = new(StringComparer.OrdinalIgnoreCase);
 
     private List<CalendarFeed> _feeds = new();
     private List<string> _failedFeedNames = new();
@@ -70,9 +75,20 @@ public class GoogleCalendarService : IGoogleCalendarService
     public GoogleCalendarService(
         IAppLauncherService appLauncherService,
         ILogger<GoogleCalendarService> logger,
+        HttpMessageHandler? httpHandler)
+        : this(appLauncherService, logger, null, httpHandler)
+    {
+    }
+
+    /// <param name="httpHandler">Optional transport override; null uses the default network stack.</param>
+    public GoogleCalendarService(
+        IAppLauncherService appLauncherService,
+        ILogger<GoogleCalendarService> logger,
+        IAppCloserService? appCloserService = null,
         HttpMessageHandler? httpHandler = null)
     {
         _appLauncherService = appLauncherService;
+        _appCloserService = appCloserService;
         _logger = logger;
         _httpHandler = httpHandler;
 
@@ -111,6 +127,23 @@ public class GoogleCalendarService : IGoogleCalendarService
             if (Enum.TryParse<GranolaScope>(LocalSettingsHelper.Get(GranolaScopeKey), out var scope))
             {
                 _filterSettings.GranolaScope = scope;
+            }
+
+            var closeAppsEnabledStr = LocalSettingsHelper.Get(CalendarCloseAppsEnabledKey);
+            if (bool.TryParse(closeAppsEnabledStr, out var closeAppsEnabled))
+            {
+                _filterSettings.CloseAppsBeforeMeetingEnabled = closeAppsEnabled;
+            }
+
+            var appsToClose = LocalSettingsHelper.Get(CalendarAppsToCloseKey);
+            if (appsToClose != null)
+            {
+                _filterSettings.AppsToClose = appsToClose;
+            }
+
+            if (int.TryParse(LocalSettingsHelper.Get(CalendarCloseAppsLeadMinutesKey), out var closeLeadMinutes))
+            {
+                _filterSettings.CloseAppsLeadMinutes = closeLeadMinutes;
             }
 
             var dismissed = LocalSettingsHelper.LoadJson<List<string>>(DismissedAlertsKey);
@@ -175,6 +208,9 @@ public class GoogleCalendarService : IGoogleCalendarService
         LocalSettingsHelper.Set(CalendarRequireMeetingLinkKey, _filterSettings.RequireMeetingLink.ToString());
         LocalSettingsHelper.Set(GranolaScopeKey, _filterSettings.GranolaScope.ToString());
         LocalSettingsHelper.Set(GranolaLeadMinutesKey, _filterSettings.GranolaLeadMinutes.ToString());
+        LocalSettingsHelper.Set(CalendarCloseAppsEnabledKey, _filterSettings.CloseAppsBeforeMeetingEnabled.ToString());
+        LocalSettingsHelper.Set(CalendarAppsToCloseKey, _filterSettings.AppsToClose);
+        LocalSettingsHelper.Set(CalendarCloseAppsLeadMinutesKey, _filterSettings.CloseAppsLeadMinutes.ToString());
         _logger.LogInformation("Calendar filter settings updated.");
     }
 
@@ -252,6 +288,7 @@ public class GoogleCalendarService : IGoogleCalendarService
         {
             ev.InGranolaScope = _filterSettings.IsInGranolaScope(ev);
             ev.OpensGranola = _filterSettings.ShouldOpenGranola(ev);
+            ev.ClosesApps = _filterSettings.ShouldCloseApps(ev);
         }
 
         _logger.LogInformation("Parsed {Count} calendar events for today from {FeedCount} feeds ({GranolaCount} eligible for Granola).",
@@ -291,30 +328,51 @@ public class GoogleCalendarService : IGoogleCalendarService
 
         foreach (var meeting in events)
         {
-            if (!meeting.OpensGranola) continue;
-            if (_dismissedAlertIds.Contains(meeting.Id) || _triggeredOccurrenceKeys.ContainsKey(GetOccurrenceKey(meeting)))
+            var occurrenceKey = GetOccurrenceKey(meeting);
+            bool isDismissed = _dismissedAlertIds.Contains(meeting.Id);
+
+            if (meeting.OpensGranola && !isDismissed && !_triggeredOccurrenceKeys.ContainsKey(occurrenceKey))
             {
-                _logger.LogInformation("Skipping alert for already dismissed or triggered meeting '{Title}'.", meeting.Title);
-                continue;
+                var granolaAlertTime = meeting.StartTime.AddMinutes(-_filterSettings.GranolaLeadMinutes);
+                var granolaDelay = granolaAlertTime - now;
+
+                if (granolaDelay > TimeSpan.Zero)
+                {
+                    _logger.LogInformation("Scheduling Granola alert for '{Title}' at {AlertTime} (in {DelayMinutes:F1} min).",
+                        meeting.Title, granolaAlertTime, granolaDelay.TotalMinutes);
+
+                    var granolaTimer = new Timer(_ => _ = OnScheduledAlertTimerElapsedAsync(meeting),
+                        null, granolaDelay, Timeout.InfiniteTimeSpan);
+
+                    _activeTimers.Add(granolaTimer);
+                }
+                else if (now >= granolaAlertTime && now < meeting.StartTime)
+                {
+                    _logger.LogInformation("Meeting '{Title}' starts within the Granola lead time. Ensuring Granola immediately.", meeting.Title);
+                    TriggerGranolaAlert(meeting);
+                }
             }
 
-            var granolaAlertTime = meeting.StartTime.AddMinutes(-_filterSettings.GranolaLeadMinutes);
-            var granolaDelay = granolaAlertTime - now;
-
-            if (granolaDelay > TimeSpan.Zero)
+            if (meeting.ClosesApps && _filterSettings.CloseAppsBeforeMeetingEnabled && !isDismissed && !_triggeredCloseAppsKeys.ContainsKey(occurrenceKey))
             {
-                _logger.LogInformation("Scheduling Granola alert for '{Title}' at {AlertTime} (in {DelayMinutes:F1} min).",
-                    meeting.Title, granolaAlertTime, granolaDelay.TotalMinutes);
+                var closeAppsAlertTime = meeting.StartTime.AddMinutes(-_filterSettings.CloseAppsLeadMinutes);
+                var closeAppsDelay = closeAppsAlertTime - now;
 
-                var granolaTimer = new Timer(_ => _ = OnScheduledAlertTimerElapsedAsync(meeting),
-                    null, granolaDelay, Timeout.InfiniteTimeSpan);
+                if (closeAppsDelay > TimeSpan.Zero)
+                {
+                    _logger.LogInformation("Scheduling App Closure for '{Title}' at {AlertTime} (in {DelayMinutes:F1} min).",
+                        meeting.Title, closeAppsAlertTime, closeAppsDelay.TotalMinutes);
 
-                _activeTimers.Add(granolaTimer);
-            }
-            else if (now >= granolaAlertTime && now < meeting.StartTime)
-            {
-                _logger.LogInformation("Meeting '{Title}' starts within the Granola lead time. Ensuring Granola immediately.", meeting.Title);
-                TriggerGranolaAlert(meeting);
+                    var closeAppsTimer = new Timer(_ => _ = OnScheduledCloseAppsTimerElapsedAsync(meeting),
+                        null, closeAppsDelay, Timeout.InfiniteTimeSpan);
+
+                    _activeTimers.Add(closeAppsTimer);
+                }
+                else if (now >= closeAppsAlertTime && now < meeting.StartTime)
+                {
+                    _logger.LogInformation("Meeting '{Title}' starts within the App Closure lead time. Triggering closure immediately.", meeting.Title);
+                    TriggerCloseApps(meeting);
+                }
             }
         }
     }
@@ -350,6 +408,37 @@ public class GoogleCalendarService : IGoogleCalendarService
         }
     }
 
+    private async Task OnScheduledCloseAppsTimerElapsedAsync(CalendarEvent scheduledMeeting)
+    {
+        try
+        {
+            if (IsConfigured)
+            {
+                var freshEvents = await GetTodayEventsAsync();
+                var currentMatch = freshEvents.FirstOrDefault(e =>
+                    string.Equals(e.Id, scheduledMeeting.Id, StringComparison.OrdinalIgnoreCase) &&
+                    e.StartTime == scheduledMeeting.StartTime);
+
+                if (currentMatch is not { ClosesApps: true })
+                {
+                    _logger.LogInformation(
+                        "Aborted App Closure for '{Title}' ({StartTime}): event was cancelled, rescheduled, or declined.",
+                        scheduledMeeting.Title, scheduledMeeting.StartTime);
+                    return;
+                }
+
+                TriggerCloseApps(currentMatch);
+                return;
+            }
+
+            TriggerCloseApps(scheduledMeeting);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during live verification for meeting '{Title}' app closure.", scheduledMeeting.Title);
+        }
+    }
+
     private void TriggerGranolaAlert(CalendarEvent meeting)
     {
         if (!meeting.OpensGranola || _dismissedAlertIds.Contains(meeting.Id))
@@ -365,6 +454,23 @@ public class GoogleCalendarService : IGoogleCalendarService
         _logger.LogInformation("Upcoming meeting alert fired for '{Title}'. Ensuring Granola is open...", meeting.Title);
         UpcomingMeetingDetected?.Invoke(this, meeting);
         _appLauncherService.EnsureGranolaRunning();
+    }
+
+    private void TriggerCloseApps(CalendarEvent meeting)
+    {
+        if (!meeting.ClosesApps || !_filterSettings.CloseAppsBeforeMeetingEnabled || _dismissedAlertIds.Contains(meeting.Id))
+        {
+            return;
+        }
+
+        if (!_triggeredCloseAppsKeys.TryAdd(GetOccurrenceKey(meeting), 0))
+        {
+            return;
+        }
+
+        _logger.LogInformation("Upcoming meeting alert fired for '{Title}'. Closing configured apps: {Apps}...",
+            meeting.Title, _filterSettings.AppsToClose);
+        _appCloserService?.CloseConfiguredApps(_filterSettings.AppsToClose);
     }
 
     private static string GetOccurrenceKey(CalendarEvent meeting) =>

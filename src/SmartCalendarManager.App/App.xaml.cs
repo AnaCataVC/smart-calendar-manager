@@ -43,6 +43,8 @@ public partial class App : Application
                 .ConfigureServices((context, services) =>
                 {
                     // Core Services
+                    services.AddSingleton<IProcessController, WindowsProcessController>();
+                    services.AddSingleton<IAppCloserService, AppCloserService>();
                     services.AddSingleton<IAppLauncherService, AppLauncherService>();
                     services.AddSingleton<IGoogleCalendarService, GoogleCalendarService>();
                     services.AddSingleton<ICronSchedulerService, CronSchedulerService>();

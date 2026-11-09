@@ -18,6 +18,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IAppLauncherService _appLauncher;
     private readonly AgendaViewModel _agenda;
     private readonly IStartupService? _startupService;
+    private readonly IAppCloserService? _appCloser;
 
     public ObservableCollection<CalendarFeed> Feeds { get; } = new();
 
@@ -38,6 +39,15 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private double _granolaLeadMinutes = 5;
+
+    [ObservableProperty]
+    private bool _closeAppsBeforeMeeting = true;
+
+    [ObservableProperty]
+    private string _appsToClose = CalendarFilterSettings.DefaultAppsToClose;
+
+    [ObservableProperty]
+    private double _closeAppsLeadMinutes = 1;
 
     [ObservableProperty]
     private string _blockTitle = "🔒 Ocupada";
@@ -89,13 +99,15 @@ public partial class SettingsViewModel : ObservableObject
         IUpdateService updateService,
         IAppLauncherService appLauncher,
         AgendaViewModel agenda,
-        IStartupService? startupService = null)
+        IStartupService? startupService = null,
+        IAppCloserService? appCloser = null)
     {
         _calendarService = calendarService;
         _updateService = updateService;
         _appLauncher = appLauncher;
         _agenda = agenda;
         _startupService = startupService;
+        _appCloser = appCloser;
 
         if (_startupService != null)
         {
@@ -114,6 +126,9 @@ public partial class SettingsViewModel : ObservableObject
         RequireLink = f.RequireMeetingLink;
         GranolaScopeIndex = (int)f.GranolaScope;
         GranolaLeadMinutes = f.GranolaLeadMinutes;
+        CloseAppsBeforeMeeting = f.CloseAppsBeforeMeetingEnabled;
+        AppsToClose = f.AppsToClose;
+        CloseAppsLeadMinutes = f.CloseAppsLeadMinutes;
 
         CurrentVersion = _updateService.CurrentAppVersion;
         RegenerateScript();
@@ -223,7 +238,10 @@ public partial class SettingsViewModel : ObservableObject
                 RequireMeetingLink = RequireLink,
                 GranolaScope = (GranolaScope)GranolaScopeIndex,
                 // NumberBox yields NaN when cleared; fall back to the default lead time.
-                GranolaLeadMinutes = double.IsNaN(GranolaLeadMinutes) ? 5 : Math.Clamp((int)GranolaLeadMinutes, 0, 60)
+                GranolaLeadMinutes = double.IsNaN(GranolaLeadMinutes) ? 5 : Math.Clamp((int)GranolaLeadMinutes, 0, 60),
+                CloseAppsBeforeMeetingEnabled = CloseAppsBeforeMeeting,
+                AppsToClose = AppsToClose,
+                CloseAppsLeadMinutes = double.IsNaN(CloseAppsLeadMinutes) ? 1 : Math.Clamp((int)CloseAppsLeadMinutes, 0, 60)
             };
             _calendarService.UpdateFilterSettings(f);
             await PersistFeedsAndRefreshAsync();
@@ -234,6 +252,21 @@ public partial class SettingsViewModel : ObservableObject
         {
             StatusMessage = $"Error al guardar: {ex.Message}";
         }
+    }
+
+    [RelayCommand]
+    public void TestCloseApps()
+    {
+        if (_appCloser == null)
+        {
+            StatusMessage = "Servicio de cierre de aplicaciones no disponible.";
+            return;
+        }
+
+        var count = _appCloser.CloseConfiguredApps(AppsToClose);
+        StatusMessage = count > 0
+            ? $"Se cerraron {count} instancia(s) de aplicaciones activas."
+            : "No se encontraron instancias activas de las aplicaciones configuradas.";
     }
 
     [RelayCommand]

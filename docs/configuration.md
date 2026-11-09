@@ -26,6 +26,16 @@ Anyone with that URL can read the calendar. If it leaks, use *Reset* next to the
 - By default only events with a video meeting link (Google Meet, Zoom, Teams, Webex) in their location or description are eligible. Turn off *Abrir Granola solo si hay enlace de reunión* under *Filtros de eventos* to include events without a link.
 - The other event filters (excluded keywords, ignore all-day events) also decide which events open Granola automatically.
 
+## Pre-Meeting App Closure (Cierre de aplicaciones antes de reuniones)
+
+Under **Cierre de aplicaciones antes de reuniones** in the Settings tab, you can automatically terminate sound-emitting or distracting applications (e.g., Spotify, Discord, Steam) before your meetings begin:
+
+- **Cerrar aplicaciones antes de la reunión:** Enables or disables automated pre-meeting application closure.
+- **Aplicaciones a cerrar:** Comma-separated list of process names (e.g., `Spotify, Discord, Steam`). Suffixes such as `.exe` are stripped automatically.
+- **Minutos de anticipación:** Configurable lead time in minutes (default: `1` minute before meeting start).
+- **Probar cierre de aplicaciones ahora:** Closes any currently running instances of the configured applications immediately for instant testing.
+- **Safety & JIT Verification:** GUI applications receive a graceful window close (`CloseMainWindow`) request first; background and tray processes without active windows are safely terminated (`Kill`). In accordance with JIT verification invariants, if a meeting is moved, cancelled, or declined, scheduled app closures are aborted automatically.
+
 ## Windows Startup (Inicio con Windows)
 
 Under **Inicio con Windows** in the Settings tab, you can configure the app to start automatically whenever you log into Windows:

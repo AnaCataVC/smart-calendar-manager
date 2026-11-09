@@ -28,7 +28,10 @@ public class CalendarFeedTests : IDisposable
     public void Dispose()
     {
         LocalSettingsHelper.ResetToDefaultPath();
-        if (File.Exists(_settingsPath)) File.Delete(_settingsPath);
+        if (File.Exists(_settingsPath))
+        {
+            try { File.Delete(_settingsPath); } catch (Exception) { /* Best-effort cleanup of temp settings */ }
+        }
     }
 
     private sealed class FakeFeedHandler : HttpMessageHandler
